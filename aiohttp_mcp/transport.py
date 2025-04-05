@@ -64,7 +64,7 @@ class SseServerTransport:
 
         async def sse_writer() -> None:
             logger.debug("Starting SSE writer")
-            async with sse_stream_writer, write_stream_reader:
+            async with (sse_stream_writer, write_stream_reader):
                 logger.debug("[sse_writer] Sending initial endpoint event")
                 await sse_stream_writer.send(
                     Event(
@@ -76,14 +76,13 @@ class SseServerTransport:
 
                 async for message in write_stream_reader:
                     logger.debug(f"[sse_writer] Sending message via SSE: {message}")
-                    await sse_stream_writer.send(
-                        Event(
-                            event="message",
-                            data=message.model_dump_json(
-                                by_alias=True, exclude_none=True
-                            ),
-                        )
-                    )
+
+                    if isinstance(message, types.JSONRPCMessage):
+                        data = message.model_dump_json(by_alias=True, exclude_none=True)
+                    else:
+                        data = str(message)
+
+                    await sse_stream_writer.send(Event(event="message", data=data))
 
         # ----------------------------------------------------------------
         async def _stream_response(request: web.Request) -> None:
@@ -106,7 +105,7 @@ class SseServerTransport:
             logger.debug("Starting SSE response task")
 
             # https://trio.readthedocs.io/en/latest/reference-core.html#custom-supervisors
-            async def cancel_on_finish(coro: Callable[[], Awaitable[None]]):
+            async def cancel_on_finish(coro: Callable[[], Awaitable[None]]) -> None:
                 await coro()
                 tg.cancel_scope.cancel()
 
