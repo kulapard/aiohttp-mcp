@@ -1,7 +1,7 @@
 import datetime
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
-from zoneinfo import ZoneInfo
 
 from aiohttp_mcp import mcp, setup_mcp_server
 
