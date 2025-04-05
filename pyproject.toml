@@ -65,7 +65,65 @@ dev = [
     "httpx>=0.28.1",
     "mcp[cli]>=1.6.0",
     "rich>=14.0.0",
+    "pip>=25.0.1",
 ]
 
 [tool.hatch.build]
 only-packages = true
+
+[tool.mypy]
+strict = true
+install_types = true
+non_interactive = true
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "RUF", # ruff
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "I", # isort
+    "C", # flake8-comprehensions
+    "B", # flake8-bugbear
+    "G", # flake8-logging-format
+    "T20", # flake8-print
+    "UP", # pyupgrade
+]
+[tool.ruff.format]
+docstring-code-format = true
+docstring-code-line-length = 60
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--cov=aiohttp_mcp --cov-branch --cov-report term:skip-covered"
+
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,Makefile,.venv,_build'
+
+[tool.coverage.run]
+branch = true
+
+[tool.coverage.report]
+# Regexes for lines to exclude from consideration
+exclude_also = [
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self\\.debug",
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+    # Don't complain about code that is only run in type checking:
+    "if TYPE_CHECKING",
+    "assert False",
+    ": \\.\\.\\.(\\s*#.*)?$",
+    "^ +\\.\\.\\.$",
+]
