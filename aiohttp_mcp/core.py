@@ -2,9 +2,9 @@ import logging
 
 from aiohttp import web
 
-from .discover import discover_modules
 from .registry import mcp
 from .transport import SseServerTransport
+from .utils.discover import discover_modules
 
 __all__ = ["setup_mcp_server"]
 
