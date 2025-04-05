@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 class Registry:
     def __init__(self) -> None:
+        # TODO: Add a way to configure the logging level
         self._fastmcp = FastMCP(warn_on_duplicate_tools=True, log_level="DEBUG")
 
     @property

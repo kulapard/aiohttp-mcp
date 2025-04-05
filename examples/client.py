@@ -1,6 +1,8 @@
+# ruff: noqa: T201
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any
 
 from anthropic import Anthropic
 from dotenv import load_dotenv
@@ -32,9 +34,7 @@ class MCPClient:
                 # List available tools
                 response = await self.session.list_tools()
                 tools = response.tools
-                print(
-                    "\nConnected to server with tools:", [tool.name for tool in tools]
-                )
+                print("\nConnected to server with tools:", [tool.name for tool in tools])
                 yield
 
     async def process_query(self, query: str) -> str:
@@ -79,9 +79,7 @@ class MCPClient:
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 assistant_message_content.append(content)
-                messages.append(
-                    {"role": "assistant", "content": assistant_message_content}
-                )
+                messages.append({"role": "assistant", "content": assistant_message_content})
                 messages.append(
                     {
                         "role": "user",

@@ -85,3 +85,6 @@ help:
 	@echo "  make lint       - Run linting"
 	@echo "  make format     - Format code"
 	@echo "  make release    - Create a new release (clean, build, publish)"
+
+run-inspector:
+	npx @modelcontextprotocol/inspector
