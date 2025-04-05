@@ -55,12 +55,3 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
-
-# Distribution / packaging
-.Python
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.py[cod]
-*$py.class 

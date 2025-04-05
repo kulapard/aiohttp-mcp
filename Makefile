@@ -29,9 +29,20 @@ build:
 
 # Clean build artifacts
 clean:
-	rm -rf build/ dist/ *.egg-info/
-	find . -type d -name "__pycache__" -exec rm -rf {} +
-	find . -type f -name "*.pyc" -delete
+	rm -rf `find . -name __pycache__`
+	rm -f `find . -type f -name '*.py[co]' `
+	rm -f `find . -type f -name '*~' `
+	rm -f `find . -type f -name '.*~' `
+	rm -rf `find . -name ".cache"`
+	rm -rf `find . -name ".pytest_cache"`
+	rm -rf `find . -name ".mypy_cache"`
+	rm -rf `find . -name ".ruff_cache"`
+	rm -rf htmlcov
+	rm -rf *.egg-info
+	rm -f .coverage
+	rm -f .coverage.*
+	rm -rf build
+	rm -rf dist
 
 # Publish to PyPI (requires PyPI token in .env file)
 publish:
@@ -47,13 +58,16 @@ test:
 	uv run pytest
 
 # Run linting
-lint:
-	uv run ruff check .
-	uv run ruff format --check .
+lint: pre-commit mypy
 
-# Format code
-format:
-	uv run ruff format .
+mypy:
+	uv run mypy .
+
+pre-commit:
+	uv run pre-commit run --all-files
+
+pre-commit-update:
+	uv run pre-commit autoupdate
 
 # Create a new release
 release: clean build publish
@@ -70,4 +84,4 @@ help:
 	@echo "  make test       - Run tests"
 	@echo "  make lint       - Run linting"
 	@echo "  make format     - Format code"
-	@echo "  make release    - Create a new release (clean, build, publish)" 
+	@echo "  make release    - Create a new release (clean, build, publish)"
