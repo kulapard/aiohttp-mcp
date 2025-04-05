@@ -19,9 +19,7 @@ class Registry:
     def server(self) -> Server[Any]:
         return self._fastmcp._mcp_server
 
-    def tool(
-        self, name: str | None = None, description: str | None = None
-    ) -> Callable[[AnyFunction], AnyFunction]:
+    def tool(self, name: str | None = None, description: str | None = None) -> Callable[[AnyFunction], AnyFunction]:
         return self._fastmcp.tool(name, description)
 
 
