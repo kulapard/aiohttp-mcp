@@ -7,11 +7,17 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-def discover_modules(package_names: Optional[List[str]] = None):
+
+def discover_modules(package_names: Optional[List[str]] = None) -> None:
     """Discover and import all modules in the specified packages."""
+    logger.debug("Discovering modules")
+
     if package_names is None:
         # By default, search all top-level packages in the project
+        logger.debug("No package names specified. Discovering all top-level packages.")
         package_names = _find_project_packages()
+    else:
+        logger.debug("Using specified package names: %r", package_names)
 
     for package_name in package_names:
         _import_package_modules(package_name)
@@ -21,6 +27,8 @@ def _find_project_packages() -> List[str]:
     """Find all top-level packages in the current project."""
     # Get the directory of the main script
     main_script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+
+    logger.debug("Finding top-level packages in %r", main_script_dir)
 
     packages = []
     # Walk through all directories in the main script directory
@@ -35,20 +43,24 @@ def _find_project_packages() -> List[str]:
     return packages
 
 
-def _import_package_modules(package_name: str):
+def _import_package_modules(package_name: str) -> None:
     """Import all modules in a package and its subpackages."""
     try:
+        logger.debug("Importing package %r", package_name)
+
+        # Import the package
         package = importlib.import_module(package_name)
 
         # Walk through all modules/subpackages in the package
         for _, module_name, _ in pkgutil.walk_packages(
             package.__path__, package.__name__ + "."
         ):
+            logger.debug("Importing module %r", module_name)
             try:
                 # Import the module
                 importlib.import_module(module_name)
             except ImportError as e:
-                print(f"Error importing module {module_name}: {e}")
+                logger.exception(f"Error importing module {module_name}: {e}")
 
     except ImportError as e:
-        print(f"Error importing package {package_name}: {e}")
+        logger.exception(f"Error importing package {package_name}: {e}")

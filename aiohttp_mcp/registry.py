@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class Registry:
     def __init__(self):
-        self._fastmcp = FastMCP(warn_on_duplicate_tools=True)
+        self._fastmcp = FastMCP(warn_on_duplicate_tools=True, log_level="DEBUG")
 
     @property
     def server(self) -> Server:

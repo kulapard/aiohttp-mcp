@@ -10,12 +10,14 @@ __all__ = ["setup_mcp_server"]
 
 logger = logging.getLogger(__name__)
 
+
 def setup_mcp_server(
     app: web.Application,
     path: str = "/mcp",
+    package_names: list[str] | None = None,
 ):
     # Go through the discovery process to find all decorated functions
-    discover_modules()
+    discover_modules(package_names)
 
     sse = SseServerTransport(path)
 

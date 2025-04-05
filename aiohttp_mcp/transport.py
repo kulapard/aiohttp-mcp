@@ -38,7 +38,12 @@ class SseServerTransport:
     @asynccontextmanager
     async def connect_sse(
         self, request: web.Request
-    ) -> AsyncIterator[tuple[MemoryObjectReceiveStream, MemoryObjectSendStream]]:
+    ) -> AsyncIterator[
+        tuple[
+            MemoryObjectReceiveStream[types.JSONRPCMessage | Exception],
+            MemoryObjectSendStream[types.JSONRPCMessage | Exception],
+        ]
+    ]:
         logger.info("Setting up SSE connection")
 
         # Create memory object streams
@@ -57,7 +62,7 @@ class SseServerTransport:
         self._read_stream_writers[session_id] = read_stream_writer
         logger.debug(f"Created new session with ID: {session_id}")
 
-        async def sse_writer():
+        async def sse_writer() -> None:
             logger.debug("Starting SSE writer")
             async with sse_stream_writer, write_stream_reader:
                 logger.debug("[sse_writer] Sending initial endpoint event")
