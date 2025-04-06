@@ -6,7 +6,7 @@ from .registry import mcp
 from .transport import EventSourceResponse, SSEServerTransport
 from .utils.discover import discover_modules
 
-__all__ = ["setup_mcp_server"]
+__all__ = ["setup_mcp_server", "AiohttpMCPServer"]
 
 logger = logging.getLogger(__name__)
 
