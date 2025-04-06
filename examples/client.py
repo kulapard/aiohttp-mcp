@@ -2,9 +2,9 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import Any
 
 from anthropic import Anthropic
+from anthropic.types import ContentBlock, MessageParam, TextBlock, ToolParam, ToolResultBlockParam, ToolUseBlock
 from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.sse import sse_client
@@ -42,16 +42,21 @@ class MCPClient:
         assert self.session, "Session not initialized"
 
         # Prepare the initial message
-        messages: list[dict[str, Any]] = [{"role": "user", "content": query}]
+        messages: list[MessageParam] = [
+            MessageParam(
+                role="user",
+                content=query,
+            )
+        ]
 
-        response = await self.session.list_tools()
+        tools_list = await self.session.list_tools()
         available_tools = [
-            {
-                "name": tool.name,
-                "description": tool.description,
-                "input_schema": tool.inputSchema,
-            }
-            for tool in response.tools
+            ToolParam(
+                name=tool.name,
+                description=tool.description or "",
+                input_schema=tool.inputSchema,
+            )
+            for tool in tools_list.tools
         ]
 
         # Initial Claude API call
@@ -63,45 +68,53 @@ class MCPClient:
         )
 
         # Process response and handle tool calls
-        final_text = []
+        final_text: list[str] = []
 
-        assistant_message_content = []
-        for content in response.content:  # type: ignore[attr-defined]
-            if content.type == "text":
+        assistant_message_content: list[ContentBlock] = []
+        for content in response.content:
+            if isinstance(content, TextBlock):
                 final_text.append(content.text)
                 assistant_message_content.append(content)
-            elif content.type == "tool_use":
+            elif isinstance(content, ToolUseBlock):
                 tool_name = content.name
                 tool_args = content.input
 
                 # Execute tool call
-                result = await self.session.call_tool(tool_name, tool_args)
+                call_tool_result = await self.session.call_tool(tool_name, tool_args)  # type: ignore
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 assistant_message_content.append(content)
-                messages.append({"role": "assistant", "content": assistant_message_content})
                 messages.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": content.id,
-                                "content": result.content,
-                            }
+                    MessageParam(
+                        role="assistant",
+                        content=assistant_message_content,
+                    )
+                )
+                messages.append(
+                    MessageParam(
+                        role="user",
+                        content=[
+                            ToolResultBlockParam(
+                                type="tool_result",
+                                tool_use_id=content.id,
+                                content=call_tool_result.content,  # type: ignore
+                            )
                         ],
-                    }
+                    )
                 )
 
                 # Get next response from Claude
                 response = self.anthropic.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=1000,
+                    model=ANTHROPIC_MODEL,
+                    max_tokens=MAX_TOKENS,
                     messages=messages,
                     tools=available_tools,
                 )
-
-                final_text.append(response.content[0].text)  # type: ignore[attr-defined]
+                content = response.content[0]
+                if isinstance(content, TextBlock):
+                    final_text.append(content.text)
+                else:
+                    raise TypeError(f"Expected TextBlock type, got {type(content)}")
 
         return "\n".join(final_text)
 
