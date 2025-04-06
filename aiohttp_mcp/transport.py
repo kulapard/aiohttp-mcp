@@ -72,8 +72,12 @@ class SSEServerTransport:
         # Internal streams
         sse_stream_writer, sse_stream_reader = anyio.create_memory_object_stream[Event](0)
 
+        # Initialize the SSE session
         session_id = uuid4()
         session_uri = f"{quote(self._message_path)}?session_id={session_id.hex}"
+        logger.debug("Session URI: %s", session_uri)
+
+        # Save the out stream writer for this session to use in handle_post_message
         self._out_stream_writers[session_id] = out_stream_writer
         logger.debug("Created new session with ID: %s", session_id)
 
