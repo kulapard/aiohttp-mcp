@@ -67,6 +67,28 @@ class SSEConnection:
     response: EventSourceResponse
 
 
+class MessageConverter:
+    """Converts between different message formats."""
+
+    @staticmethod
+    def to_string(msg: types.JSONRPCMessage | Exception) -> str:
+        """Convert message to string."""
+        if isinstance(msg, types.JSONRPCMessage):
+            return msg.model_dump_json(by_alias=True, exclude_none=True)
+        return str(msg)
+
+    @staticmethod
+    def to_event(msg: types.JSONRPCMessage | Exception, event_type: EventType = EventType.MESSAGE) -> Event:
+        """Convert message to SSE event."""
+        data = MessageConverter.to_string(msg)
+        return Event(event_type=event_type, data=data)
+
+    @staticmethod
+    def from_json(json_data: str) -> types.JSONRPCMessage:
+        """Convert JSON string to JSONRPCMessage."""
+        return types.JSONRPCMessage.model_validate_json(json_data)
+
+
 class SSEServerTransport:
     _out_stream_writers: dict[UUID, MemoryObjectSendStream[types.JSONRPCMessage | Exception]]
 
@@ -95,7 +117,7 @@ class SSEServerTransport:
         in_stream = Stream[types.JSONRPCMessage | Exception].create()
         out_stream = Stream[types.JSONRPCMessage | Exception].create()
 
-        # Internal streams
+        # Internal event stream for SSE
         sse_stream = Stream[Event].create()
 
         # Initialize the SSE session
@@ -109,16 +131,15 @@ class SSEServerTransport:
 
         async def _in_stream_processor() -> None:
             """Redirect messages from the input stream to the SSE stream."""
-            logger.debug("Starting SSE writer")
+            logger.debug("Starting IN stream processor")
             async with sse_stream.writer, in_stream.reader:
                 logger.debug("Sending initial endpoint event on startup")
-                event = Event(event_type=EventType.ENDPOINT, data=session_uri)
-                await sse_stream.writer.send(event)
-                logger.debug("Sent event: %s", event)
+                endpoint_event = Event(event_type=EventType.ENDPOINT, data=session_uri)
+                await sse_stream.writer.send(endpoint_event)
+                logger.debug("Sent event: %s", endpoint_event)
 
                 async for msg in in_stream.reader:
-                    data = self._ensure_string(msg)
-                    event = Event(event_type=EventType.MESSAGE, data=data)
+                    event = MessageConverter.to_event(msg)
                     logger.debug("Sending event: %s", msg)
                     await sse_stream.writer.send(event)
                     logger.debug("Sent event: %s", event)
@@ -182,7 +203,7 @@ class SSEServerTransport:
         logger.debug("Received JSON: %s", body)
 
         try:
-            message = types.JSONRPCMessage.model_validate_json(body)
+            message = MessageConverter.from_json(body)
             logger.debug("Validated client message: %s", message)
         except ValidationError as err:
             logger.error("Failed to parse message: %s", err)
