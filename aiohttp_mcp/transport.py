@@ -35,11 +35,23 @@ class Event:
     data: str
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SSEConnection:
+    """A class to manage the connection for SSE."""
+
+    read_stream: MemoryObjectReceiveStream[types.JSONRPCMessage | Exception]
+    write_stream: MemoryObjectSendStream[types.JSONRPCMessage | Exception]
+    request: web.Request
+    response: EventSourceResponse
+
+
 T = TypeVar("T", covariant=True)
 
 
 class Stream(Generic[T]):
     """A pair of connected streams for bidirectional communication."""
+
+    __slots__ = ("reader", "writer")
 
     def __init__(self, reader: MemoryObjectReceiveStream[T], writer: MemoryObjectSendStream[T]):
         self.reader = reader
@@ -55,16 +67,6 @@ class Stream(Generic[T]):
         """Close both streams."""
         await self.reader.aclose()
         await self.writer.aclose()
-
-
-@dataclass
-class SSEConnection:
-    """A class to manage the connection for SSE."""
-
-    read_stream: MemoryObjectReceiveStream[types.JSONRPCMessage | Exception]
-    write_stream: MemoryObjectSendStream[types.JSONRPCMessage | Exception]
-    request: web.Request
-    response: EventSourceResponse
 
 
 class MessageConverter:
@@ -90,10 +92,9 @@ class MessageConverter:
 
 
 class SSEServerTransport:
-    _out_stream_writers: dict[UUID, MemoryObjectSendStream[types.JSONRPCMessage | Exception]]
+    __slots__ = ("_message_path", "_out_stream_writers", "_send_timeout")
 
     def __init__(self, message_path: str, send_timeout: float | None = None) -> None:
-        super().__init__()
         self._message_path = message_path
         self._send_timeout = send_timeout
         self._out_stream_writers: dict[uuid.UUID, MemoryObjectSendStream[types.JSONRPCMessage | Exception]] = {}
