@@ -1,4 +1,6 @@
-from .core import setup_mcp_server
+from aiohttp_sse import EventSourceResponse
+
+from .core import AiohttpMCPServer, setup_mcp_server
 from .registry import mcp
 
-__all__ = ["mcp", "setup_mcp_server"]
+__all__ = ["AiohttpMCPServer", "EventSourceResponse", "mcp", "setup_mcp_server"]

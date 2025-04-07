@@ -20,6 +20,11 @@ class AiohttpMCPServer:
         self._path = path
         self._sse = SSEServerTransport(path)
 
+    @property
+    def path(self) -> str:
+        """Return the path of the MCP server."""
+        return self._path
+
     def setup_routes(self, app: web.Application) -> None:
         """Setup routes for the MCP server.
         1. GET /mcp: Handles the SSE connection.

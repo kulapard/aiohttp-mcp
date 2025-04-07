@@ -23,5 +23,18 @@ class Registry:
     def tool(self, name: str | None = None, description: str | None = None) -> Callable[[AnyFunction], AnyFunction]:
         return self._fastmcp.tool(name, description)
 
+    def resource(
+        self,
+        uri: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        mime_type: str | None = None,
+    ) -> Callable[[AnyFunction], AnyFunction]:
+        return self._fastmcp.resource(uri, name=name, description=description, mime_type=mime_type)
+
+    def prompt(self, name: str | None = None, description: str | None = None) -> Callable[[AnyFunction], AnyFunction]:
+        return self._fastmcp.prompt(name, description)
+
 
 mcp: Registry = Registry()
