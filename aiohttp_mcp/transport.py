@@ -45,7 +45,7 @@ class SSEConnection:
     response: EventSourceResponse
 
 
-T = TypeVar("T", covariant=True)
+T = TypeVar("T")
 
 
 class Stream(Generic[T]):

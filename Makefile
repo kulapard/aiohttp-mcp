@@ -4,6 +4,8 @@
 -include .env
 export
 
+all: test lint
+
 # Create and activate virtual environment
 venv:
 	uv venv
