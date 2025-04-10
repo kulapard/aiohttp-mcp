@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import AbstractAsyncContextManager
 from typing import Any, Literal
 
@@ -8,6 +8,10 @@ from mcp.server.lowlevel import Server
 from mcp.server.lowlevel.server import LifespanResultT
 from mcp.types import (
     AnyFunction,
+    EmbeddedResource,
+    ImageContent,
+    TextContent,
+    Tool,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,3 +61,13 @@ class AiohttpMCP:
 
     def prompt(self, name: str | None = None, description: str | None = None) -> Callable[[AnyFunction], AnyFunction]:
         return self._fastmcp.prompt(name, description)
+
+    async def list_tools(self) -> list[Tool]:
+        """List all available tools."""
+        return await self._fastmcp.list_tools()
+
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any]
+    ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+        """Call a tool by name with arguments."""
+        return await self._fastmcp.call_tool(name, arguments)

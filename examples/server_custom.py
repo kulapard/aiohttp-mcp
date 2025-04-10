@@ -2,8 +2,9 @@ import datetime
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
+from aiohttp_sse import EventSourceResponse
 
-from aiohttp_mcp import AiohttpMCP, AppBuilder, EventSourceResponse
+from aiohttp_mcp import AiohttpMCP, AppBuilder
 
 mcp = AiohttpMCP()
 app_builder = AppBuilder(mcp, path="/mcp")
