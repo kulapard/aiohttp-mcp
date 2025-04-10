@@ -51,22 +51,39 @@ T = TypeVar("T")
 class Stream(Generic[T]):
     """A pair of connected streams for bidirectional communication."""
 
-    __slots__ = ("reader", "writer")
+    __slots__ = ("_reader", "_writer")
 
     def __init__(self, reader: MemoryObjectReceiveStream[T], writer: MemoryObjectSendStream[T]):
-        self.reader = reader
-        self.writer = writer
+        self._reader = reader
+        self._writer = writer
+
+    @property
+    def reader(self) -> MemoryObjectReceiveStream[T]:
+        """Return the reader stream."""
+        return self._reader
+
+    @property
+    def writer(self) -> MemoryObjectSendStream[T]:
+        """Return the writer stream."""
+        return self._writer
 
     @classmethod
     def create(cls, max_buffer_size: int = 0) -> "Stream[T]":
-        """Create a new stream pair."""
+        """Create a new Stream instance.
+
+        Parameters:
+            max_buffer_size: Number of items held in the buffer until ``send()`` starts blocking
+
+        Returns:
+            A new Stream instance
+        """
         writer, reader = anyio.create_memory_object_stream[T](max_buffer_size)
         return cls(reader=reader, writer=writer)
 
     async def close(self) -> None:
         """Close both streams."""
-        await self.reader.aclose()
-        await self.writer.aclose()
+        await self._reader.aclose()
+        await self._writer.aclose()
 
 
 class MessageConverter:
@@ -92,12 +109,12 @@ class MessageConverter:
 
 
 class SSEServerTransport:
-    __slots__ = ("_message_path", "_out_stream_writers", "_send_timeout")
+    __slots__ = ("_message_path", "_out_streams", "_send_timeout")
 
     def __init__(self, message_path: str, send_timeout: float | None = None) -> None:
         self._message_path = message_path
         self._send_timeout = send_timeout
-        self._out_stream_writers: dict[uuid.UUID, MemoryObjectSendStream[types.JSONRPCMessage | Exception]] = {}
+        self._out_streams: dict[uuid.UUID, Stream[types.JSONRPCMessage | Exception]] = {}
 
     @staticmethod
     def _ensure_string(msg: types.JSONRPCMessage | Exception) -> str:
@@ -127,7 +144,7 @@ class SSEServerTransport:
         logger.debug("Session URI: %s", session_uri)
 
         # Save the out stream writer for this session to use in handle_post_message
-        self._out_stream_writers[session_id] = out_stream.writer
+        self._out_streams[session_id] = out_stream
         logger.debug("Created new session with ID: %s", session_id)
 
         async def _in_stream_processor() -> None:
@@ -148,16 +165,17 @@ class SSEServerTransport:
         async def _response_processor() -> None:
             """Redirect messages from the SSE stream to the response."""
             logger.debug("Starting SSE stream processor")
-            async for event in sse_stream.reader:
-                logger.debug("Got event to send: %s", event)
-                with anyio.move_on_after(self._send_timeout) as cancel_scope:
-                    logger.debug("Sending event via SSE: %s", event)
-                    await response.send(data=event.data, event=event.event_type)
-                    logger.debug("Sent event via SSE: %s", event)
+            async with sse_stream.reader:
+                async for event in sse_stream.reader:
+                    logger.debug("Got event to send: %s", event)
+                    with anyio.move_on_after(self._send_timeout) as cancel_scope:
+                        logger.debug("Sending event via SSE: %s", event)
+                        await response.send(data=event.data, event=event.event_type)
+                        logger.debug("Sent event via SSE: %s", event)
 
-                if cancel_scope and cancel_scope.cancel_called:
-                    await sse_stream.close()
-                    raise TimeoutError()
+                    if cancel_scope and cancel_scope.cancel_called:
+                        await sse_stream.close()
+                        raise TimeoutError()
 
         async with sse_response(request) as response:
             async with anyio.create_task_group() as tg:
@@ -178,7 +196,8 @@ class SSEServerTransport:
                     )
                 finally:
                     # Clean up session when connection is closed
-                    del self._out_stream_writers[session_id]
+                    await out_stream.close()
+                    del self._out_streams[session_id]
                     logger.debug("Removed session with ID: %s", session_id)
 
     async def handle_post_message(self, request: web.Request) -> web.Response:
@@ -195,8 +214,8 @@ class SSEServerTransport:
             logger.warning("Received invalid session ID: %s", session_id_param)
             return web.Response(text="Invalid session ID", status=400)
 
-        out_stream_writers = self._out_stream_writers.get(session_id)
-        if not out_stream_writers:
+        out_stream = self._out_streams.get(session_id)
+        if not out_stream:
             logger.warning("Could not find session for ID: %s", session_id)
             return web.Response(text="Could not find session", status=404)
 
@@ -208,9 +227,9 @@ class SSEServerTransport:
             logger.debug("Validated client message: %s", message)
         except ValidationError as err:
             logger.error("Failed to parse message: %s", err)
-            await out_stream_writers.send(err)
+            await out_stream.writer.send(err)
             return web.Response(text="Could not parse message", status=400)
 
         logger.debug("Sending message to writer: %s", message)
-        await out_stream_writers.send(message)
+        await out_stream.writer.send(message)
         return web.Response(text="Accepted", status=202)
