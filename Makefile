@@ -90,3 +90,12 @@ help:
 
 run-inspector:
 	npx @modelcontextprotocol/inspector
+
+run-server:
+	uv run examples/server.py
+
+run-server-custom:
+	uv run examples/server_custom.py
+
+run-client:
+	uv run examples/client.py
