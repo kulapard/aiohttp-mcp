@@ -97,5 +97,8 @@ run-server:
 run-server-custom:
 	uv run examples/server_custom.py
 
+run-server-subapp:
+	uv run examples/server_subapp.py
+
 run-client:
 	uv run examples/client.py
