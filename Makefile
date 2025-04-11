@@ -59,6 +59,10 @@ publish:
 test:
 	uv run pytest
 
+cov-dev:
+	@uv run pytest --cov-report=html
+	@open -n "file://`pwd`/htmlcov/index.html"
+
 # Run linting
 lint: pre-commit mypy
 

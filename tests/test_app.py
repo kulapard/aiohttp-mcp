@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 pytestmark = pytest.mark.anyio
 
 
-PATH = "/test-mcp"
+TEST_PATH = "/test-mcp"
 
 
 @asynccontextmanager
@@ -36,7 +36,7 @@ async def aiohttp_client(app: web.Application) -> AsyncIterator[TestClient[web.R
 
 
 def get_mcp_server_url(server: TestServer) -> str:
-    return f"http://{server.host}:{server.port}{PATH}"
+    return f"http://{server.host}:{server.port}{TEST_PATH}"
 
 
 @asynccontextmanager
@@ -49,19 +49,19 @@ async def mcp_client_session(mcp_server_url: str) -> AsyncIterator[ClientSession
 
 @pytest.fixture
 def app(mcp: AiohttpMCP) -> web.Application:
-    return build_mcp_app(mcp, path=PATH)
+    return build_mcp_app(mcp, path=TEST_PATH)
 
 
 @pytest.fixture
 def subapp(mcp: AiohttpMCP) -> web.Application:
     app = web.Application()
-    setup_mcp_subapp(app, mcp, prefix=PATH)
+    setup_mcp_subapp(app, mcp, prefix=TEST_PATH)
     return app
 
 
 @pytest.fixture
 def custom_app(mcp: AiohttpMCP) -> web.Application:
-    app_builder = AppBuilder(mcp, path=PATH)
+    app_builder = AppBuilder(mcp, path=TEST_PATH)
 
     async def custom_sse_handler(request: web.Request) -> web.StreamResponse:
         """Custom SSE handler."""
@@ -94,44 +94,119 @@ def has_route(app: web.Application, method: str, path: str) -> bool:
 
 async def test_app_initialization(app: web.Application) -> None:
     assert isinstance(app, web.Application), type(app)
-    assert has_route(app, "GET", PATH)
-    assert has_route(app, "POST", PATH)
+    assert has_route(app, "GET", TEST_PATH)
+    assert has_route(app, "POST", TEST_PATH)
 
 
 async def test_subapp_initialization(subapp: web.Application) -> None:
     assert isinstance(subapp, web.Application)
-    assert has_route(subapp, "GET", PATH)
-    assert has_route(subapp, "POST", PATH)
+    assert has_route(subapp, "GET", TEST_PATH)
+    assert has_route(subapp, "POST", TEST_PATH)
 
 
 async def test_custom_app_initialization(custom_app: web.Application) -> None:
     assert isinstance(custom_app, web.Application)
-    assert has_route(custom_app, "GET", PATH)
-    assert has_route(custom_app, "POST", PATH)
+    assert has_route(custom_app, "GET", TEST_PATH)
+    assert has_route(custom_app, "POST", TEST_PATH)
 
 
-async def test_app(app: web.Application) -> None:
+def register_mcp_resources(mcp: AiohttpMCP) -> None:
+    """Register MCP resources."""
+
+    @mcp.tool()
+    def echo_tool(message: str) -> str:
+        """Echo a message as a tool"""
+        return f"Tool echo: {message}"
+
+    @mcp.resource("echo://{message}")
+    def echo_resource(message: str) -> str:
+        """Echo a message as a resource. The is template resource"""
+        return f"Resource echo: {message}"
+
+    @mcp.resource("config://my-config")
+    def config_resource() -> str:
+        """Return a config resource. This is static resource"""
+        return "This is a config resource"
+
+    @mcp.prompt()
+    def echo_prompt(message: str) -> str:
+        """Create an echo prompt"""
+        return f"Please process this message: {message}"
+
+
+async def test_app(mcp: AiohttpMCP, app: web.Application) -> None:
+    register_mcp_resources(mcp)
+
     async with aiohttp_server(app) as server:
         url = get_mcp_server_url(server)
         async with mcp_client_session(url) as session:
-            response = await session.list_tools()
-            tools = response.tools
-            assert len(tools) == 0
+            # Tools
+            tools_result = await session.list_tools()
+            tools = tools_result.tools
+            assert len(tools) == 1
+
+            # Resources
+            resources_result = await session.list_resources()
+            resources = resources_result.resources
+            assert len(resources) == 1
+
+            resource_templates_result = await session.list_resource_templates()
+            resource_templates = resource_templates_result.resourceTemplates
+            assert len(resource_templates) == 1
+
+            # Prompts
+            prompts_result = await session.list_prompts()
+            prompts = prompts_result.prompts
+            assert len(prompts) == 1
 
 
-async def test_subapp(subapp: web.Application) -> None:
+async def test_subapp(mcp: AiohttpMCP, subapp: web.Application) -> None:
+    register_mcp_resources(mcp)
+
     async with aiohttp_server(subapp) as server:
         url = get_mcp_server_url(server)
         async with mcp_client_session(url) as session:
-            response = await session.list_tools()
-            tools = response.tools
-            assert len(tools) == 0
+            # Tools
+            tools_result = await session.list_tools()
+            tools = tools_result.tools
+            assert len(tools) == 1
+
+            # Resources
+            resources_result = await session.list_resources()
+            resources = resources_result.resources
+            assert len(resources) == 1
+
+            resource_templates_result = await session.list_resource_templates()
+            resource_templates = resource_templates_result.resourceTemplates
+            assert len(resource_templates) == 1
+
+            # Prompts
+            prompts_result = await session.list_prompts()
+            prompts = prompts_result.prompts
+            assert len(prompts) == 1
 
 
-async def test_custom_app(custom_app: web.Application) -> None:
+async def test_custom_app(mcp: AiohttpMCP, custom_app: web.Application) -> None:
+    register_mcp_resources(mcp)
+
     async with aiohttp_server(custom_app) as server:
         url = get_mcp_server_url(server)
         async with mcp_client_session(url) as session:
-            response = await session.list_tools()
-            tools = response.tools
-            assert len(tools) == 0
+            # Tools
+            tools_result = await session.list_tools()
+            tools = tools_result.tools
+            assert len(tools) == 1
+
+            # Resources
+            resources_result = await session.list_resources()
+            resources = resources_result.resources
+            assert len(resources) == 1
+
+            resource_templates_result = await session.list_resource_templates()
+            resource_templates = resource_templates_result.resourceTemplates
+            assert len(resource_templates) == 1
+
+            # Prompts
+            prompts_result = await session.list_prompts()
+            prompts = prompts_result.prompts
+            assert len(prompts) == 1
