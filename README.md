@@ -97,6 +97,37 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
+### Client Example
+
+Here's how to create a client that interacts with the MCP server:
+
+```python
+import asyncio
+
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+
+
+async def main():
+    # Connect to the MCP server
+    async with sse_client("http://localhost:8080/mcp") as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            # Initialize the session
+            await session.initialize()
+
+            # List available tools
+            tools = await session.list_tools()
+            print("Available tools:", [tool.name for tool in tools.tools])
+
+            # Call a tool
+            result = await session.call_tool("get_time", {"timezone": "UTC"})
+            print("Current time in UTC:", result.content)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
 ### More Examples
 
 For more examples, check the [examples](examples) directory.
