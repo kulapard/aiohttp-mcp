@@ -15,7 +15,15 @@ from aiohttp_sse import EventSourceResponse, sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from pydantic import ValidationError
 
-__all__ = ["EventSourceResponse", "SSEConnection", "SSEServerTransport"]
+__all__ = [
+    "Event",
+    "EventSourceResponse",
+    "EventType",
+    "MessageConverter",
+    "SSEConnection",
+    "SSEServerTransport",
+    "Stream",
+]
 
 logger = logging.getLogger(__name__)
 

@@ -66,7 +66,6 @@ dev = [
     "pip>=25.0.1",
     "pytest>=8.3.5,<9.0.0",
     "pytest-cov>=6.1.1,<7.0.0",
-    "pytest-aiohttp>=1.1.0,<2.0.0",
     "pytest-sugar>=1.0.0,<2.0.0",
 ]
 
@@ -100,8 +99,6 @@ docstring-code-format = true
 docstring-code-line-length = 60
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 addopts = "--cov=aiohttp_mcp --cov-branch --cov-report term:skip-covered"
 
 [tool.codespell]

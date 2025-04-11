@@ -1,4 +1,4 @@
-from .app import AppBuilder, build_mcp_application, setup_mcp_application
+from .app import AppBuilder, build_mcp_app, setup_mcp_subapp
 from .core import AiohttpMCP
 
-__all__ = ["AiohttpMCP", "AppBuilder", "build_mcp_application", "setup_mcp_application"]
+__all__ = ["AiohttpMCP", "AppBuilder", "build_mcp_app", "setup_mcp_subapp"]

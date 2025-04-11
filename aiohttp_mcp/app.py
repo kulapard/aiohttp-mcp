@@ -6,7 +6,7 @@ from .core import AiohttpMCP
 from .transport import EventSourceResponse, SSEServerTransport
 from .utils.discover import discover_modules
 
-__all__ = ["AppBuilder", "build_mcp_application", "setup_mcp_application"]
+__all__ = ["AppBuilder", "build_mcp_app", "setup_mcp_subapp"]
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class AppBuilder:
         return await self._sse.handle_post_message(request)
 
 
-def build_mcp_application(
+def build_mcp_app(
     mcp_registry: AiohttpMCP,
     path: str = "/mcp",
     is_subapp: bool = False,
@@ -72,7 +72,7 @@ def build_mcp_application(
     return AppBuilder(mcp_registry, path).build(is_subapp=is_subapp)
 
 
-def setup_mcp_application(
+def setup_mcp_subapp(
     app: web.Application,
     mcp_registry: AiohttpMCP,
     prefix: str = "/mcp",
@@ -82,5 +82,5 @@ def setup_mcp_application(
     # Go through the discovery process to find all decorated functions
     discover_modules(package_names)
 
-    mcp_app = build_mcp_application(mcp_registry, prefix, is_subapp=True)
+    mcp_app = build_mcp_app(mcp_registry, prefix, is_subapp=True)
     app.add_subapp(prefix, mcp_app)

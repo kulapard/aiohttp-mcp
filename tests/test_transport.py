@@ -1,13 +1,13 @@
 import logging
 import uuid
+from collections.abc import AsyncIterator
 
 import mcp.types as types
 import pytest
 from aiohttp import web
-from aiohttp.test_utils import TestClient
+from aiohttp.test_utils import TestClient, TestServer
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from mcp.types import JSONRPCMessage, JSONRPCRequest
-from pytest_aiohttp.plugin import AiohttpClient
 
 from aiohttp_mcp.transport import (
     Event,
@@ -18,6 +18,9 @@ from aiohttp_mcp.transport import (
 )
 
 logger = logging.getLogger(__name__)
+
+# This is the same as using the @pytest.mark.anyio on all test functions in the module
+pytestmark = pytest.mark.anyio
 
 
 @pytest.fixture
@@ -35,7 +38,7 @@ async def echo(
 
 
 @pytest.fixture
-async def app(transport: SSEServerTransport) -> web.Application:
+def app(transport: SSEServerTransport) -> web.Application:
     app = web.Application()
 
     async def sse_handler(request: web.Request) -> web.StreamResponse:
@@ -50,8 +53,11 @@ async def app(transport: SSEServerTransport) -> web.Application:
 
 
 @pytest.fixture
-async def client(app: web.Application, aiohttp_client: AiohttpClient) -> TestClient[web.Request, web.Application]:
-    return await aiohttp_client(app)
+async def aiohttp_client(app: web.Application) -> AsyncIterator[TestClient[web.Request, web.Application]]:
+    client = TestClient(TestServer(app))
+    await client.start_server()
+    yield client
+    await client.close()
 
 
 @pytest.fixture
@@ -112,8 +118,8 @@ class TestStream:
 
 
 class TestSSEServerTransport:
-    async def test_connect_sse(self, client: TestClient[web.Request, web.Application]) -> None:
-        async with client.get("/sse") as response:
+    async def test_connect_sse(self, aiohttp_client: TestClient[web.Request, web.Application]) -> None:
+        async with aiohttp_client.get("/sse") as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -129,10 +135,10 @@ class TestSSEServerTransport:
             assert session_uri.startswith("/messages?session_id=")
 
     async def test_handle_post_message_success(
-        self, client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
+        self, aiohttp_client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
     ) -> None:
         # Start SSE connection
-        async with client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse", timeout=5) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -151,7 +157,7 @@ class TestSSEServerTransport:
             assert empty_line == b"\r\n"
 
             # Send message and verify response
-            post_response = await client.post(
+            post_response = await aiohttp_client.post(
                 session_uri,
                 json=valid_message.model_dump(),
                 headers={"Content-Type": "application/json"},
@@ -170,10 +176,10 @@ class TestSSEServerTransport:
             assert msg == valid_message.model_dump_json(by_alias=True, exclude_none=True)
 
     async def test_handle_post_message_wrong_status(
-        self, client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
+        self, aiohttp_client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
     ) -> None:
         # Start SSE connection
-        async with client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse", timeout=5) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -192,7 +198,7 @@ class TestSSEServerTransport:
             response.close()
 
             # Send message and verify response
-            post_response = await client.post(
+            post_response = await aiohttp_client.post(
                 session_uri,
                 json=valid_message.model_dump(),
                 headers={"Content-Type": "application/json"},
@@ -204,17 +210,17 @@ class TestSSEServerTransport:
 
     async def test_handle_post_message_missing_session_id(
         self,
-        client: TestClient[web.Request, web.Application],
+        aiohttp_client: TestClient[web.Request, web.Application],
     ) -> None:
-        response = await client.post("/messages")
+        response = await aiohttp_client.post("/messages")
         assert response.status == 400
         assert await response.text() == "No session ID provided"
 
     async def test_handle_post_message_invalid_session_id(
         self,
-        client: TestClient[web.Request, web.Application],
+        aiohttp_client: TestClient[web.Request, web.Application],
     ) -> None:
-        response = await client.post(
+        response = await aiohttp_client.post(
             "/messages",
             params={"session_id": "invalid"},
         )
@@ -223,9 +229,9 @@ class TestSSEServerTransport:
 
     async def test_handle_post_message_session_not_found(
         self,
-        client: TestClient[web.Request, web.Application],
+        aiohttp_client: TestClient[web.Request, web.Application],
     ) -> None:
-        response = await client.post(
+        response = await aiohttp_client.post(
             "/messages",
             params={"session_id": str(uuid.uuid4())},
             json={"jsonrpc": "2.0", "id": "1", "method": "test", "params": {}},
@@ -233,9 +239,11 @@ class TestSSEServerTransport:
         assert response.status == 404
         assert await response.text() == "Could not find session"
 
-    async def test_handle_post_message_invalid_json(self, client: TestClient[web.Request, web.Application]) -> None:
+    async def test_handle_post_message_invalid_json(
+        self, aiohttp_client: TestClient[web.Request, web.Application]
+    ) -> None:
         # Start SSE connection
-        async with client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse", timeout=5) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -251,7 +259,7 @@ class TestSSEServerTransport:
             assert session_uri.startswith("/messages?session_id=")
 
             # Send invalid JSON and verify response
-            post_response = await client.post(
+            post_response = await aiohttp_client.post(
                 session_uri,
                 data="invalid json",
                 headers={"Content-Type": "application/json"},

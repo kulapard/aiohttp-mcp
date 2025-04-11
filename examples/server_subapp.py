@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
-from aiohttp_mcp import AiohttpMCP, setup_mcp_application
+from aiohttp_mcp import AiohttpMCP, setup_mcp_subapp
 
 mcp = AiohttpMCP(debug=False)
 
@@ -16,5 +16,5 @@ def get_time(timezone: str) -> str:
 
 
 app = web.Application()
-setup_mcp_application(app, mcp, prefix="/mcp")
+setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
