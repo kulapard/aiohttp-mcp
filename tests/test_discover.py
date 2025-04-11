@@ -1,7 +1,10 @@
 import sys
+from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
 from aiohttp_mcp.utils import discover
 
@@ -40,7 +43,7 @@ def test_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture(autouse=True)
-def clean_modules():
+def clean_modules() -> Generator[None, None, None]:
     """Clean up imported modules after each test."""
     yield
     # Remove test modules from sys.modules after each test
@@ -49,7 +52,7 @@ def clean_modules():
         del sys.modules[name]
 
 
-def test_find_project_packages(test_project: Path, monkeypatch):
+def test_find_project_packages(test_project: Path, monkeypatch: MonkeyPatch) -> None:
     """Test finding project packages using real files."""
     # Set up the environment to use our test project
     monkeypatch.setattr(sys, "argv", [str(test_project / "main.py")])
@@ -62,7 +65,7 @@ def test_find_project_packages(test_project: Path, monkeypatch):
     assert "not_a_package" not in packages
 
 
-def test_import_package_modules(test_project: Path, monkeypatch):
+def test_import_package_modules(test_project: Path, monkeypatch: MonkeyPatch) -> None:
     """Test importing package modules using real files."""
     # Add test project to Python path so we can import from it
     monkeypatch.syspath_prepend(str(test_project))
@@ -71,17 +74,23 @@ def test_import_package_modules(test_project: Path, monkeypatch):
     discover._import_package_modules("package1")
 
     # Verify modules were imported
-    import package1
-    import package1.module1
-    import package1.module2
-    import package1.subpackage.submodule
+    # Ignore mypy errors for dynamic imports
+    import package1  # type: ignore[import-not-found]
+    import package1.module1  # type: ignore[import-not-found]
+    import package1.module2  # type: ignore[import-not-found]
+    import package1.subpackage.submodule  # type: ignore[import-not-found]
 
-    assert package1.module1.value == "module1"
-    assert package1.module2.value == "module2"
-    assert package1.subpackage.submodule.value == "submodule"
+    # We know these attributes exist because we created them
+    pkg1_mod1: Any = package1.module1
+    pkg1_mod2: Any = package1.module2
+    pkg1_submod: Any = package1.subpackage.submodule
+
+    assert pkg1_mod1.value == "module1"
+    assert pkg1_mod2.value == "module2"
+    assert pkg1_submod.value == "submodule"
 
 
-def test_discover_modules_with_auto_discovery(test_project: Path, monkeypatch):
+def test_discover_modules_with_auto_discovery(test_project: Path, monkeypatch: MonkeyPatch) -> None:
     """Test automatic discovery and import of all packages."""
     # Set up the environment
     monkeypatch.setattr(sys, "argv", [str(test_project / "main.py")])
@@ -90,21 +99,19 @@ def test_discover_modules_with_auto_discovery(test_project: Path, monkeypatch):
     # Discover and import all packages
     discover.discover_modules()
 
-    # Verify all packages and their modules were imported
-    import package1
-    import package1.module1
-    import package1.module2
-    import package1.subpackage.submodule
-    import package2
-    import package2.module
+    # We know these modules exist because we created them
+    pkg1_mod1: Any = __import__("package1.module1").module1
+    pkg1_mod2: Any = __import__("package1.module2").module2
+    pkg1_submod: Any = __import__("package1.subpackage.submodule").subpackage.submodule
+    pkg2_mod: Any = __import__("package2.module").module
 
-    assert package1.module1.value == "module1"
-    assert package1.module2.value == "module2"
-    assert package1.subpackage.submodule.value == "submodule"
-    assert package2.module.value == "package2_module"
+    assert pkg1_mod1.value == "module1"
+    assert pkg1_mod2.value == "module2"
+    assert pkg1_submod.value == "submodule"
+    assert pkg2_mod.value == "package2_module"
 
 
-def test_discover_modules_with_specific_package(test_project: Path, monkeypatch):
+def test_discover_modules_with_specific_package(test_project: Path, monkeypatch: MonkeyPatch) -> None:
     """Test discovery and import of a specific package."""
     # Add test project to Python path
     monkeypatch.syspath_prepend(str(test_project))
@@ -112,11 +119,9 @@ def test_discover_modules_with_specific_package(test_project: Path, monkeypatch)
     # Discover and import only package2
     discover.discover_modules(["package2"])
 
-    # Verify package2 was imported and is accessible
-    import package2
-    import package2.module
-
-    assert package2.module.value == "package2_module"
+    # We know this module exists because we created it
+    pkg2_mod: Any = __import__("package2.module").module
+    assert pkg2_mod.value == "package2_module"
 
     # Verify package1's modules were not imported
     assert "package1.module1" not in sys.modules
