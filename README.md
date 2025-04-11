@@ -23,10 +23,13 @@ Tools for building Model Context Protocol (MCP) servers on top of aiohttp.
 ## Installation
 
 With [uv](https://docs.astral.sh/uv/) package manager:
+
 ```bash
 uv add aiohttp-mcp
 ```
+
 Or with pip:
+
 ```bash
 pip install aiohttp-mcp
 ```
@@ -40,11 +43,14 @@ Create a simple MCP server with a custom tool:
 ```python
 import datetime
 from zoneinfo import ZoneInfo
+
 from aiohttp import web
+
 from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
 # Initialize MCP
 mcp = AiohttpMCP(debug=False)
+
 
 # Define a tool
 @mcp.tool()
@@ -52,6 +58,7 @@ def get_time(timezone: str) -> str:
     """Get the current time in the specified timezone."""
     tz = ZoneInfo(timezone)
     return datetime.datetime.now(tz).isoformat()
+
 
 # Create and run the application
 app = build_mcp_app(mcp, path="/mcp")
@@ -94,18 +101,21 @@ For more examples, check the [examples](examples) directory.
 ### Setup Development Environment
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/kulapard/aiohttp-mcp.git
 cd aiohttp-mcp
 ```
 
 2. Create and activate a virtual environment:
+
 ```bash
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 3. Install development dependencies:
+
 ```bash
 uv sync --all-extras
 ```
