@@ -64,24 +64,30 @@ You can also use aiohttp-mcp as a sub-application in your existing aiohttp serve
 
 ```python
 from aiohttp import web
-from aiohttp_mcp import AiohttpMCP, build_mcp_app
+
+from aiohttp_mcp import AiohttpMCP, setup_mcp_subapp
 
 mcp = AiohttpMCP(debug=False)
+
 
 # Define your tools here
 @mcp.tool()
 def example_tool(param: str) -> str:
     return f"Processed: {param}"
 
+
 # Create your main application
 app = web.Application()
 
 # Add MCP as a sub-application
-mcp_app = build_mcp_app(mcp, path="/mcp")
-app.add_subapp("/api", mcp_app)  # This will mount the MCP app under /api/mcp
+setup_mcp_subapp(app, mcp, prefix="/mcp")
 
 web.run_app(app)
 ```
+
+### More Examples
+
+For more examples, check the [examples](examples) directory.
 
 ## Development
 
