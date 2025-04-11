@@ -7,8 +7,12 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from mcp import ClientSession
 from mcp.client.sse import sse_client
+from mcp.types import TextContent, TextResourceContents
+from pydantic import AnyUrl
 
 from aiohttp_mcp import AiohttpMCP, AppBuilder, build_mcp_app, setup_mcp_subapp
+
+from .utils import register_mcp_resources
 
 logger = logging.getLogger(__name__)
 
@@ -83,30 +87,6 @@ def custom_app(mcp: AiohttpMCP) -> web.Application:
     return app
 
 
-def register_mcp_resources(mcp: AiohttpMCP) -> None:
-    """Register MCP resources."""
-
-    @mcp.tool()
-    def echo_tool(message: str) -> str:
-        """Echo a message as a tool"""
-        return f"Tool echo: {message}"
-
-    @mcp.resource("echo://{message}")
-    def echo_resource(message: str) -> str:
-        """Echo a message as a resource. The is template resource"""
-        return f"Resource echo: {message}"
-
-    @mcp.resource("config://my-config")
-    def config_resource() -> str:
-        """Return a config resource. This is static resource"""
-        return "This is a config resource"
-
-    @mcp.prompt()
-    def echo_prompt(message: str) -> str:
-        """Create an echo prompt"""
-        return f"Please process this message: {message}"
-
-
 def has_route(app: web.Application, method: str, path: str) -> bool:
     """Check if the given path exists in the app."""
     return any(
@@ -127,7 +107,7 @@ async def test_app_initialization(mcp: AiohttpMCP, request: pytest.FixtureReques
 
 
 @pytest.mark.parametrize("app_fixture", ["standalone_app", "subapp", "custom_app"])
-async def test_mcp_apps(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fixture: str) -> None:
+async def test_mcp_app(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fixture: str) -> None:
     """Test MCP functionality with different types of apps."""
     app = request.getfixturevalue(app_fixture)
 
@@ -141,16 +121,39 @@ async def test_mcp_apps(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fix
             tools = tools_result.tools
             assert len(tools) == 1
 
+            # Test call_tool
+            tool_result = await session.call_tool("echo_tool", {"message": "test message"})
+            assert len(tool_result.content) == 1
+            assert isinstance(tool_result.content[0], TextContent)
+            assert tool_result.content[0].text == "Tool echo: test message"
+
             # Resources
             resources_result = await session.list_resources()
-            resources = resources_result.resources
-            assert len(resources) == 1
+            assert len(resources_result.resources) == 1
+            assert resources_result.resources[0].uri == AnyUrl("config://my-config")
 
-            resource_templates_result = await session.list_resource_templates()
-            resource_templates = resource_templates_result.resourceTemplates
-            assert len(resource_templates) == 1
+            # Test read_resource
+            resource_result = await session.read_resource(AnyUrl("config://my-config"))
+            contents = resource_result.contents
+            assert len(contents) == 1
+            assert isinstance(contents[0], TextResourceContents)
+            assert contents[0].text == "This is a config resource"
+
+            # Resource Templates
+            templates_result = await session.list_resource_templates()
+            assert len(templates_result.resourceTemplates) == 1
+            assert templates_result.resourceTemplates[0].uriTemplate == "echo://{message}"
 
             # Prompts
             prompts_result = await session.list_prompts()
-            prompts = prompts_result.prompts
-            assert len(prompts) == 1
+            assert len(prompts_result.prompts) == 1
+            assert prompts_result.prompts[0].name == "echo_prompt"
+
+            # Test get_prompt
+            prompt_result = await session.get_prompt("echo_prompt", {"message": "test prompt"})
+            messages = prompt_result.messages
+            assert len(messages) == 1
+            message = messages[0]
+            assert message.role == "user"
+            assert message.content.type == "text"
+            assert message.content.text == "Please process this message: test prompt"
