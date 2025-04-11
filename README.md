@@ -9,7 +9,7 @@
 ![GitHub License](https://img.shields.io/github/license/kulapard/aiohttp-mcp?style=flat&color=blue)
 ---
 
-Tools for building Model Context Protocol (MCP) servers on top of aiohttp.
+Tools for building [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers on top of [aiohttp](https://docs.aiohttp.org/).
 
 ## Features
 
