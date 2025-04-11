@@ -44,10 +44,10 @@ class AppBuilder:
         2. POST: Handles incoming messages.
         """
         # Use empty path due to building the app to use as a subapp with a prefix
-        app.router.add_get(path, self.handle_sse)
-        app.router.add_post(path, self.handle_message)
+        app.router.add_get(path, self.sse_handler)
+        app.router.add_post(path, self.message_handler)
 
-    async def handle_sse(self, request: web.Request) -> EventSourceResponse:
+    async def sse_handler(self, request: web.Request) -> EventSourceResponse:
         """Handle the SSE connection and start the MCP server."""
         async with self._sse.connect_sse(request) as sse_connection:
             await self._mcp.server.run(
@@ -58,7 +58,7 @@ class AppBuilder:
             )
         return sse_connection.response
 
-    async def handle_message(self, request: web.Request) -> web.Response:
+    async def message_handler(self, request: web.Request) -> web.Response:
         """Handle incoming messages from the client."""
         return await self._sse.handle_post_message(request)
 

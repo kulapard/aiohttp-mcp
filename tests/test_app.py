@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -8,10 +9,12 @@ from mcp.types import TextContent
 from aiohttp_mcp import AiohttpMCP, AppBuilder, build_mcp_application, setup_mcp_application
 from aiohttp_mcp.types import Tool
 
+logger = logging.getLogger(__name__)
+
 
 @pytest.fixture
 def mcp() -> AiohttpMCP:
-    return AiohttpMCP(debug=False)
+    return AiohttpMCP()
 
 
 @pytest.fixture
@@ -29,13 +32,27 @@ def subapp(mcp: AiohttpMCP) -> web.Application:
 @pytest.fixture
 def custom_app(mcp: AiohttpMCP) -> web.Application:
     app_builder = AppBuilder(mcp, path="/mcp")
+
+    async def custom_sse_handler(request: web.Request) -> web.StreamResponse:
+        """Custom SSE handler."""
+        logger.info("Do something before starting the SSE connection")
+        response = await app_builder.sse_handler(request)
+        logger.info("Do something after closing the SSE connection")
+        return response
+
+    async def custom_message_handler(request: web.Request) -> web.Response:
+        """Custom message handler."""
+        logger.info("Do something before sending the message")
+        response = await app_builder.message_handler(request)
+        logger.info("Do something after sending the message")
+        return response
+
     app = web.Application()
-    app.router.add_get(app_builder.path, app_builder.handle_sse)
-    app.router.add_post(app_builder.path, app_builder.handle_message)
+    app.router.add_get(app_builder.path, custom_sse_handler)
+    app.router.add_post(app_builder.path, custom_message_handler)
     return app
 
 
-@pytest.mark.asyncio
 async def test_tool_registration(mcp: AiohttpMCP) -> None:
     @mcp.tool()
     def get_time(timezone: str) -> str:
@@ -64,19 +81,16 @@ def has_route(app: web.Application, path: str) -> bool:
     )
 
 
-@pytest.mark.asyncio
 async def test_server_initialization(app: web.Application) -> None:
     assert isinstance(app, web.Application)
     assert has_route(app, "/mcp")
 
 
-@pytest.mark.asyncio
 async def test_subapp_initialization(subapp: web.Application) -> None:
     assert isinstance(subapp, web.Application)
     assert has_route(subapp, "/mcp")
 
 
-@pytest.mark.asyncio
 async def test_custom_app_initialization(custom_app: web.Application) -> None:
     assert isinstance(custom_app, web.Application)
     assert has_route(custom_app, "/mcp")

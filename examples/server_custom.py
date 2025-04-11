@@ -12,14 +12,18 @@ app_builder = AppBuilder(mcp, path="/mcp")
 
 async def handle_sse(request: web.Request) -> EventSourceResponse:
     """Custom handler for SSE connection."""
-    # Do any preprocessing here if needed. For example, add authentication checks
-    return await app_builder.handle_sse(request)
+    # Do something before starting the SSE connection
+    response = await app_builder.sse_handler(request)
+    # Do something after closing the SSE connection
+    return response
 
 
 async def handle_message(request: web.Request) -> web.Response:
     """Custom handler for incoming messages."""
-    # Do any preprocessing here if needed. For example, add authentication checks
-    return await app_builder.handle_message(request)
+    # Do something before sending the message
+    response = await app_builder.message_handler(request)
+    # Do something after sending the message
+    return response
 
 
 @mcp.tool()
