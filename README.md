@@ -49,7 +49,7 @@ from aiohttp import web
 from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
 # Initialize MCP
-mcp = AiohttpMCP(debug=False)
+mcp = AiohttpMCP()
 
 
 # Define a tool
@@ -70,17 +70,22 @@ web.run_app(app)
 You can also use aiohttp-mcp as a sub-application in your existing aiohttp server:
 
 ```python
+import datetime
+from zoneinfo import ZoneInfo
+
 from aiohttp import web
 
 from aiohttp_mcp import AiohttpMCP, setup_mcp_subapp
 
-mcp = AiohttpMCP(debug=False)
+mcp = AiohttpMCP()
 
 
-# Define your tools here
+# Define a tool
 @mcp.tool()
-def example_tool(param: str) -> str:
-    return f"Processed: {param}"
+def get_time(timezone: str) -> str:
+    """Get the current time in the specified timezone."""
+    tz = ZoneInfo(timezone)
+    return datetime.datetime.now(tz).isoformat()
 
 
 # Create your main application
