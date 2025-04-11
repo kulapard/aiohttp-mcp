@@ -19,7 +19,7 @@ from aiohttp_mcp.transport import (
 
 logger = logging.getLogger(__name__)
 
-# This is the same as using the @pytest.mark.anyio on all test functions in the module
+# Set the pytest marker for async tests/fixtures
 pytestmark = pytest.mark.anyio
 
 

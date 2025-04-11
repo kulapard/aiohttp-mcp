@@ -7,7 +7,7 @@ from mcp.types import TextContent
 from aiohttp_mcp import AiohttpMCP
 from aiohttp_mcp.types import Tool
 
-# This is the same as using the @pytest.mark.anyio on all test functions in the module
+# Set the pytest marker for async tests/fixtures
 pytestmark = pytest.mark.anyio
 
 
