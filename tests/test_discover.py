@@ -127,3 +127,34 @@ def test_discover_modules_with_specific_package(test_project: Path, monkeypatch:
     assert "package1.module1" not in sys.modules
     assert "package1.module2" not in sys.modules
     assert "package1.subpackage.submodule" not in sys.modules
+
+
+def test_import_package_modules_with_invalid_package(test_project: Path, monkeypatch: MonkeyPatch) -> None:
+    """Test importing a non-existent package."""
+    # Add test project to Python path
+    monkeypatch.syspath_prepend(str(test_project))
+
+    # Try to import a non-existent package
+    discover._import_package_modules("non_existent_package")
+
+    # Verify no modules were imported
+    assert "non_existent_package" not in sys.modules
+
+
+def test_import_package_modules_with_invalid_module(test_project: Path, monkeypatch: MonkeyPatch) -> None:
+    """Test importing a package with an invalid module."""
+    # Add test project to Python path
+    monkeypatch.syspath_prepend(str(test_project))
+
+    # Create a package with an invalid module
+    invalid_pkg_dir = test_project / "invalid_pkg"
+    invalid_pkg_dir.mkdir()
+    (invalid_pkg_dir / "__init__.py").write_text("# Invalid package init")
+    (invalid_pkg_dir / "bad_module.py").write_text("raise ImportError('Test import error')")
+
+    # Try to import the package with the invalid module
+    discover._import_package_modules("invalid_pkg")
+
+    # Verify the package was imported but not the invalid module
+    assert "invalid_pkg" in sys.modules
+    assert "invalid_pkg.bad_module" not in sys.modules
