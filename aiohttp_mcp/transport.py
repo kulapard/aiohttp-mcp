@@ -28,11 +28,14 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 
-class EventType(str, Enum):
+class EventType(str, Enum):  # for Py10 compatibility
     """Event types for SSE."""
 
     ENDPOINT = "endpoint"
     MESSAGE = "message"
+
+    def __str__(self) -> str:  # for Py11+ compatibility
+        return self.value
 
 
 @dataclass

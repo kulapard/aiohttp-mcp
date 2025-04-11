@@ -138,7 +138,7 @@ class TestSSEServerTransport:
         self, aiohttp_client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
     ) -> None:
         # Start SSE connection
-        async with aiohttp_client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse") as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -161,7 +161,6 @@ class TestSSEServerTransport:
                 session_uri,
                 json=valid_message.model_dump(),
                 headers={"Content-Type": "application/json"},
-                timeout=5,
             )
             assert post_response.status == 202
             response_text = await post_response.text()
@@ -179,7 +178,7 @@ class TestSSEServerTransport:
         self, aiohttp_client: TestClient[web.Request, web.Application], valid_message: types.JSONRPCRequest
     ) -> None:
         # Start SSE connection
-        async with aiohttp_client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse") as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -202,7 +201,6 @@ class TestSSEServerTransport:
                 session_uri,
                 json=valid_message.model_dump(),
                 headers={"Content-Type": "application/json"},
-                timeout=5,
             )
             assert post_response.status == 404
             response_text = await post_response.text()
@@ -243,7 +241,7 @@ class TestSSEServerTransport:
         self, aiohttp_client: TestClient[web.Request, web.Application]
     ) -> None:
         # Start SSE connection
-        async with aiohttp_client.get("/sse", timeout=5) as response:
+        async with aiohttp_client.get("/sse") as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "text/event-stream"
             assert response.headers["Cache-Control"] == "no-cache"
@@ -263,7 +261,6 @@ class TestSSEServerTransport:
                 session_uri,
                 data="invalid json",
                 headers={"Content-Type": "application/json"},
-                timeout=5,
             )
             assert post_response.status == 400
             response_text = await post_response.text()
