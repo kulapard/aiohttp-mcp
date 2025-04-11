@@ -140,7 +140,7 @@ class SSEServerTransport:
         self._out_streams[session_id] = out_stream
         logger.debug("Created new session with ID: %s", session_id)
 
-        async def _in_stream_processor() -> None:
+        async def _process_input_stream() -> None:
             """Redirect messages from the input stream to the SSE stream."""
             logger.debug("Starting IN stream processor")
             async with sse_stream.writer, in_stream.reader:
@@ -155,7 +155,7 @@ class SSEServerTransport:
                     await sse_stream.writer.send(event)
                     logger.debug("Sent event: %s", event)
 
-        async def _response_processor() -> None:
+        async def _process_response() -> None:
             """Redirect messages from the SSE stream to the response."""
             logger.debug("Starting SSE stream processor")
             async with sse_stream.reader:
@@ -177,8 +177,8 @@ class SSEServerTransport:
                     await coro()
                     tg.cancel_scope.cancel()
 
-                tg.start_soon(cancel_on_finish, _response_processor)
-                tg.start_soon(cancel_on_finish, _in_stream_processor)
+                tg.start_soon(cancel_on_finish, _process_response)
+                tg.start_soon(cancel_on_finish, _process_input_stream)
 
                 try:
                     yield SSEConnection(
