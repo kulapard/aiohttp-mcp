@@ -23,7 +23,7 @@ env-file:
 
 # Install the package
 install:
-	uv add -e .
+	uv add .
 
 # Build the package
 build:
