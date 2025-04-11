@@ -48,7 +48,7 @@ async def mcp_client_session(mcp_server_url: str) -> AsyncIterator[ClientSession
 
 
 @pytest.fixture
-def app(mcp: AiohttpMCP) -> web.Application:
+def standalone_app(mcp: AiohttpMCP) -> web.Application:
     return build_mcp_app(mcp, path=TEST_PATH)
 
 
@@ -83,33 +83,6 @@ def custom_app(mcp: AiohttpMCP) -> web.Application:
     return app
 
 
-def has_route(app: web.Application, method: str, path: str) -> bool:
-    """Check if the given path exists in the app."""
-    return any(
-        route.resource.canonical == path and route.method == method
-        for route in app.router.routes()
-        if isinstance(route.resource, web.Resource)
-    )
-
-
-async def test_app_initialization(app: web.Application) -> None:
-    assert isinstance(app, web.Application), type(app)
-    assert has_route(app, "GET", TEST_PATH)
-    assert has_route(app, "POST", TEST_PATH)
-
-
-async def test_subapp_initialization(subapp: web.Application) -> None:
-    assert isinstance(subapp, web.Application)
-    assert has_route(subapp, "GET", TEST_PATH)
-    assert has_route(subapp, "POST", TEST_PATH)
-
-
-async def test_custom_app_initialization(custom_app: web.Application) -> None:
-    assert isinstance(custom_app, web.Application)
-    assert has_route(custom_app, "GET", TEST_PATH)
-    assert has_route(custom_app, "POST", TEST_PATH)
-
-
 def register_mcp_resources(mcp: AiohttpMCP) -> None:
     """Register MCP resources."""
 
@@ -134,62 +107,33 @@ def register_mcp_resources(mcp: AiohttpMCP) -> None:
         return f"Please process this message: {message}"
 
 
-async def test_app(mcp: AiohttpMCP, app: web.Application) -> None:
+def has_route(app: web.Application, method: str, path: str) -> bool:
+    """Check if the given path exists in the app."""
+    return any(
+        route.resource.canonical == path and route.method == method
+        for route in app.router.routes()
+        if isinstance(route.resource, web.Resource)
+    )
+
+
+@pytest.mark.parametrize("app_fixture", ["standalone_app", "subapp", "custom_app"])
+async def test_app_initialization(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fixture: str) -> None:
+    """Test MCP functionality with different types of apps."""
+    app = request.getfixturevalue(app_fixture)
+
+    assert isinstance(app, web.Application), type(app)
+    assert has_route(app, "GET", TEST_PATH)
+    assert has_route(app, "POST", TEST_PATH)
+
+
+@pytest.mark.parametrize("app_fixture", ["standalone_app", "subapp", "custom_app"])
+async def test_mcp_apps(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fixture: str) -> None:
+    """Test MCP functionality with different types of apps."""
+    app = request.getfixturevalue(app_fixture)
+
     register_mcp_resources(mcp)
 
     async with aiohttp_server(app) as server:
-        url = get_mcp_server_url(server)
-        async with mcp_client_session(url) as session:
-            # Tools
-            tools_result = await session.list_tools()
-            tools = tools_result.tools
-            assert len(tools) == 1
-
-            # Resources
-            resources_result = await session.list_resources()
-            resources = resources_result.resources
-            assert len(resources) == 1
-
-            resource_templates_result = await session.list_resource_templates()
-            resource_templates = resource_templates_result.resourceTemplates
-            assert len(resource_templates) == 1
-
-            # Prompts
-            prompts_result = await session.list_prompts()
-            prompts = prompts_result.prompts
-            assert len(prompts) == 1
-
-
-async def test_subapp(mcp: AiohttpMCP, subapp: web.Application) -> None:
-    register_mcp_resources(mcp)
-
-    async with aiohttp_server(subapp) as server:
-        url = get_mcp_server_url(server)
-        async with mcp_client_session(url) as session:
-            # Tools
-            tools_result = await session.list_tools()
-            tools = tools_result.tools
-            assert len(tools) == 1
-
-            # Resources
-            resources_result = await session.list_resources()
-            resources = resources_result.resources
-            assert len(resources) == 1
-
-            resource_templates_result = await session.list_resource_templates()
-            resource_templates = resource_templates_result.resourceTemplates
-            assert len(resource_templates) == 1
-
-            # Prompts
-            prompts_result = await session.list_prompts()
-            prompts = prompts_result.prompts
-            assert len(prompts) == 1
-
-
-async def test_custom_app(mcp: AiohttpMCP, custom_app: web.Application) -> None:
-    register_mcp_resources(mcp)
-
-    async with aiohttp_server(custom_app) as server:
         url = get_mcp_server_url(server)
         async with mcp_client_session(url) as session:
             # Tools
