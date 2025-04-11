@@ -116,13 +116,6 @@ class SSEServerTransport:
         self._send_timeout = send_timeout
         self._out_streams: dict[uuid.UUID, Stream[types.JSONRPCMessage | Exception]] = {}
 
-    @staticmethod
-    def _ensure_string(msg: types.JSONRPCMessage | Exception) -> str:
-        """Convert message to string."""
-        if isinstance(msg, types.JSONRPCMessage):
-            return msg.model_dump_json(by_alias=True, exclude_none=True)
-        return str(msg)
-
     def _create_session_uri(self, session_id: UUID) -> str:
         """Create a session URI from a session ID."""
         return f"{quote(self._message_path)}?session_id={session_id.hex}"
