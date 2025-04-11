@@ -48,7 +48,7 @@ async def mcp_client_session(mcp_server_url: str) -> AsyncIterator[ClientSession
 
 
 @pytest.fixture
-def standalone_app(mcp: AiohttpMCP) -> web.Application:
+def app(mcp: AiohttpMCP) -> web.Application:
     return build_mcp_app(mcp, path=PATH)
 
 
@@ -92,10 +92,10 @@ def has_route(app: web.Application, method: str, path: str) -> bool:
     )
 
 
-async def test_server_initialization(standalone_app: web.Application) -> None:
-    assert isinstance(standalone_app, web.Application), type(standalone_app)
-    assert has_route(standalone_app, "GET", PATH)
-    assert has_route(standalone_app, "POST", PATH)
+async def test_app_initialization(app: web.Application) -> None:
+    assert isinstance(app, web.Application), type(app)
+    assert has_route(app, "GET", PATH)
+    assert has_route(app, "POST", PATH)
 
 
 async def test_subapp_initialization(subapp: web.Application) -> None:
@@ -110,8 +110,8 @@ async def test_custom_app_initialization(custom_app: web.Application) -> None:
     assert has_route(custom_app, "POST", PATH)
 
 
-async def test_standalone_app(standalone_app: web.Application) -> None:
-    async with aiohttp_server(standalone_app) as server:
+async def test_app(app: web.Application) -> None:
+    async with aiohttp_server(app) as server:
         url = get_mcp_server_url(server)
         async with mcp_client_session(url) as session:
             response = await session.list_tools()
