@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kulapard-aiohttp-mcp-badge.png)](https://mseep.ai/app/kulapard-aiohttp-mcp)
+
 # aiohttp-mcp
 
 ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/kulapard/aiohttp-mcp/ci.yml?branch=master)
