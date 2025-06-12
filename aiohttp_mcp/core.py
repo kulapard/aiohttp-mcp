@@ -17,6 +17,7 @@ from mcp.types import (
     ResourceTemplate,
     TextContent,
     Tool,
+    ToolAnnotations,
 )
 from pydantic import AnyUrl
 
@@ -52,9 +53,11 @@ class AiohttpMCP:
     def server(self) -> Server[Any]:
         return self._fastmcp._mcp_server
 
-    def tool(self, name: str | None = None, description: str | None = None) -> Callable[[AnyFunction], AnyFunction]:
+    def tool(
+        self, name: str | None = None, description: str | None = None, annotations: ToolAnnotations | None = None
+    ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a tool."""
-        return self._fastmcp.tool(name, description)
+        return self._fastmcp.tool(name, description, annotations)
 
     def resource(
         self,
