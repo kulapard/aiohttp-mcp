@@ -3,6 +3,7 @@ from collections.abc import Callable, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager
 from typing import Any, Literal
 
+from aiohttp import web
 from mcp.server.fastmcp import FastMCP
 from mcp.server.lowlevel import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
@@ -48,10 +49,23 @@ class AiohttpMCP:
             warn_on_duplicate_prompts=warn_on_duplicate_prompts,
             lifespan=lifespan,
         )
+        self._app: web.Application | None = None
 
     @property
     def server(self) -> Server[Any]:
         return self._fastmcp._mcp_server
+
+    @property
+    def app(self) -> web.Application:
+        if self._app is None:
+            raise RuntimeError("Application has not been built yet. Call `setup_app()` first.")
+        return self._app
+
+    def setup_app(self, app: web.Application) -> None:
+        """Set the aiohttp application instance."""
+        if self._app is not None:
+            raise RuntimeError("Application has already been set. Cannot set it again.")
+        self._app = app
 
     def tool(
         self, name: str | None = None, description: str | None = None, annotations: ToolAnnotations | None = None
