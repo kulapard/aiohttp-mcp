@@ -15,5 +15,5 @@ def get_time(timezone: str) -> str:
     return datetime.datetime.now(tz).isoformat()
 
 
-app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE, stateless=True)
+app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE_HTTP, stateless=True)
 web.run_app(app)

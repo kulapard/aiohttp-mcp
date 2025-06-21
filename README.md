@@ -97,6 +97,35 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
+### Using Streamable HTTP Transport
+
+For production deployments requiring advanced session management, you can use the streamable HTTP transport mode:
+
+```python
+import datetime
+from zoneinfo import ZoneInfo
+
+from aiohttp import web
+
+from aiohttp_mcp import AiohttpMCP, TransportMode, build_mcp_app
+
+# Initialize MCP
+mcp = AiohttpMCP()
+
+
+# Define a tool
+@mcp.tool()
+def get_time(timezone: str) -> str:
+    """Get the current time in the specified timezone."""
+    tz = ZoneInfo(timezone)
+    return datetime.datetime.now(tz).isoformat()
+
+
+# Create application with streamable transport
+app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE, stateless=True)
+web.run_app(app)
+```
+
 ### Client Example
 
 Here's how to create a client that interacts with the MCP server:

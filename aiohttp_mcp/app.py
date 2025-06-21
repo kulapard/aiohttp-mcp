@@ -18,7 +18,7 @@ class TransportMode(str, Enum):
     """Transport modes for MCP server deployment."""
 
     SSE = "sse"
-    STREAMABLE = "streamable"
+    STREAMABLE_HTTP = "streamable_http"
 
     def __str__(self) -> str:
         return self.value
@@ -48,7 +48,7 @@ class AppBuilder:
 
         if transport_mode == TransportMode.SSE:
             self._sse = SSEServerTransport(path)
-        elif transport_mode == TransportMode.STREAMABLE:
+        elif transport_mode == TransportMode.STREAMABLE_HTTP:
             self._session_manager = StreamableHTTPSessionManager(
                 server=self._mcp.server,
                 event_store=self._mcp.event_store,
@@ -84,7 +84,7 @@ class AppBuilder:
         if self._transport_mode == TransportMode.SSE:
             app.router.add_get(path, self.sse_handler)
             app.router.add_post(path, self.message_handler)
-        elif self._transport_mode == TransportMode.STREAMABLE:
+        elif self._transport_mode == TransportMode.STREAMABLE_HTTP:
 
             async def _setup_session_manager(_app: web.Application) -> AsyncIterator[None]:
                 if self._session_manager is None:
