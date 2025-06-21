@@ -1,9 +1,11 @@
+import json
 import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
+from http import HTTPStatus
 from typing import Generic, TypeVar
 from urllib.parse import quote
 from uuid import UUID, uuid4
@@ -13,7 +15,20 @@ import mcp.types as types
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+
+# Removed transport security imports as per user request
 from mcp.shared.message import ServerMessageMetadata, SessionMessage
+from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+from mcp.types import (
+    INTERNAL_ERROR,
+    INVALID_PARAMS,
+    INVALID_REQUEST,
+    PARSE_ERROR,
+    ErrorData,
+    JSONRPCError,
+    JSONRPCMessage,
+    JSONRPCRequest,
+)
 from pydantic import ValidationError
 
 __all__ = [
@@ -23,6 +38,7 @@ __all__ = [
     "MessageConverter",
     "SSEConnection",
     "SSEServerTransport",
+    "StatelessStreamableHTTPTransport",
     "Stream",
 ]
 
@@ -240,3 +256,196 @@ class SSEServerTransport:
         logger.debug("Sending message to writer: %s", message)
         await out_stream.writer.send(session_message)
         return web.Response(text="Accepted", status=202)
+
+
+# Constants for streamable transport
+MAXIMUM_MESSAGE_SIZE = 4 * 1024 * 1024  # 4MB
+MCP_PROTOCOL_VERSION_HEADER = "mcp-protocol-version"
+CONTENT_TYPE_JSON = "application/json"
+
+
+class StatelessStreamableHTTPTransport:
+    """
+    Stateless HTTP transport for MCP.
+
+    Handles JSON-RPC messages in HTTP POST requests with JSON responses.
+    No session management - each request is processed independently.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize a new stateless streamable HTTP transport.
+        """
+        pass
+
+    def _create_error_response(
+        self,
+        error_message: str,
+        status_code: HTTPStatus,
+        error_code: int = INVALID_REQUEST,
+        headers: dict[str, str] | None = None,
+    ) -> web.Response:
+        """Create an error response with JSON-RPC error format."""
+        response_headers = {"Content-Type": CONTENT_TYPE_JSON}
+        if headers:
+            response_headers.update(headers)
+
+        error_response = JSONRPCError(
+            jsonrpc="2.0",
+            id="server-error",
+            error=ErrorData(
+                code=error_code,
+                message=error_message,
+            ),
+        )
+
+        return web.Response(
+            text=error_response.model_dump_json(by_alias=True, exclude_none=True),
+            status=status_code.value,
+            headers=response_headers,
+        )
+
+    def _create_json_response(
+        self,
+        response_message: JSONRPCMessage | None,
+        status_code: HTTPStatus = HTTPStatus.OK,
+        headers: dict[str, str] | None = None,
+    ) -> web.Response:
+        """Create a JSON response from a JSONRPCMessage."""
+        response_headers = {"Content-Type": CONTENT_TYPE_JSON}
+        if headers:
+            response_headers.update(headers)
+
+        response_text = (
+            response_message.model_dump_json(by_alias=True, exclude_none=True)
+            if response_message else None
+        )
+
+        return web.Response(
+            text=response_text,
+            status=status_code.value,
+            headers=response_headers,
+        )
+
+    def _check_content_type(self, request: web.Request) -> bool:
+        """Check if the request has the correct Content-Type."""
+        content_type = request.headers.get("content-type", "")
+        content_type_parts = [part.strip() for part in content_type.split(";")[0].split(",")]
+        return any(part == CONTENT_TYPE_JSON for part in content_type_parts)
+
+    def _validate_protocol_version(self, request: web.Request) -> str | None:
+        """Validate the protocol version header and return error message if invalid."""
+        protocol_version = request.headers.get(MCP_PROTOCOL_VERSION_HEADER)
+
+        if protocol_version is None:
+            protocol_version = "2024-11-05"  # Default version
+
+        if protocol_version not in SUPPORTED_PROTOCOL_VERSIONS:
+            supported_versions = ", ".join(SUPPORTED_PROTOCOL_VERSIONS)
+            return (
+                f"Unsupported protocol version: {protocol_version}. "
+                f"Supported versions: {supported_versions}"
+            )
+
+        return None
+
+    async def handle_request(self, request: web.Request) -> web.Response:
+        """Handle HTTP requests for the stateless transport."""
+        # Security validation removed as per user request
+
+        if request.method == "POST":
+            return await self._handle_post_request(request)
+        elif request.method in ("GET", "DELETE"):
+            return self._create_error_response(
+                "Method Not Allowed: Stateless transport only supports POST requests",
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                headers={"Allow": "POST"},
+            )
+        else:
+            return self._create_error_response(
+                "Method Not Allowed",
+                HTTPStatus.METHOD_NOT_ALLOWED,
+                headers={"Allow": "POST"},
+            )
+
+    async def _handle_post_request(self, request: web.Request) -> web.Response:
+        """Handle POST requests containing JSON-RPC messages."""
+        try:
+            # Validate protocol version
+            if error_msg := self._validate_protocol_version(request):
+                return self._create_error_response(error_msg, HTTPStatus.BAD_REQUEST)
+
+            # Validate Content-Type
+            if not self._check_content_type(request):
+                return self._create_error_response(
+                    "Unsupported Media Type: Content-Type must be application/json",
+                    HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                )
+
+            # Parse the body
+            body = await request.text()
+            if len(body.encode()) > MAXIMUM_MESSAGE_SIZE:
+                return self._create_error_response(
+                    "Payload Too Large: Message exceeds maximum size",
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                )
+
+            try:
+                raw_message = json.loads(body)
+            except json.JSONDecodeError as e:
+                return self._create_error_response(
+                    f"Parse error: {e!s}", HTTPStatus.BAD_REQUEST, PARSE_ERROR
+                )
+
+            try:
+                message = JSONRPCMessage.model_validate(raw_message)
+            except ValidationError as e:
+                return self._create_error_response(
+                    f"Validation error: {e!s}",
+                    HTTPStatus.BAD_REQUEST,
+                    INVALID_PARAMS,
+                )
+
+            # For notifications (no response expected), return 202 Accepted
+            if not isinstance(message.root, JSONRPCRequest):
+                return self._create_json_response(None, HTTPStatus.ACCEPTED)
+
+            # For requests, we need to process them and return the response
+            # This will be handled by the calling code that sets up the transport
+            # For now, return a placeholder response
+            return self._create_error_response(
+                "Not Implemented: Request processing not yet implemented",
+                HTTPStatus.NOT_IMPLEMENTED,
+                INTERNAL_ERROR,
+            )
+
+        except Exception as err:
+            logger.exception("Error handling POST request")
+            return self._create_error_response(
+                f"Internal Server Error: {err!s}",
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                INTERNAL_ERROR,
+            )
+
+    @asynccontextmanager
+    async def connect(
+        self,
+    ) -> AsyncIterator[
+        tuple[
+            MemoryObjectReceiveStream[SessionMessage | Exception],
+            MemoryObjectSendStream[SessionMessage],
+        ]
+    ]:
+        """Context manager that provides read and write streams for a connection."""
+        read_stream_writer, read_stream = anyio.create_memory_object_stream[
+            SessionMessage | Exception
+        ](0)
+        write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
+
+        try:
+            yield read_stream, write_stream
+        finally:
+            await read_stream_writer.aclose()
+            await read_stream.aclose()
+            await write_stream_reader.aclose()
+            await write_stream.aclose()

@@ -15,6 +15,7 @@ from aiohttp_mcp.transport import (
     EventType,
     MessageConverter,
     SSEServerTransport,
+    StatelessStreamableHTTPTransport,
     Stream,
 )
 
@@ -275,3 +276,15 @@ class TestSSEServerTransport:
             assert post_response.status == 400
             response_text = await post_response.text()
             assert response_text == "Could not parse message"
+
+
+class TestStatelessStreamableHTTPTransport:
+    def test_initialization(self) -> None:
+        transport = StatelessStreamableHTTPTransport()
+        assert transport is not None
+
+    async def test_connect_context_manager(self) -> None:
+        transport = StatelessStreamableHTTPTransport()
+        async with transport.connect() as (read_stream, write_stream):
+            assert isinstance(read_stream, MemoryObjectReceiveStream)
+            assert isinstance(write_stream, MemoryObjectSendStream)
