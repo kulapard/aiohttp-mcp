@@ -1,25 +1,62 @@
 import logging
+from collections.abc import AsyncIterator
+from enum import Enum
 
 from aiohttp import web
 
 from .core import AiohttpMCP
+from .streamable_http_manager import StreamableHTTPSessionManager
 from .transport import EventSourceResponse, SSEServerTransport
 from .utils.discover import discover_modules
 
-__all__ = ["AppBuilder", "build_mcp_app", "setup_mcp_subapp"]
+__all__ = ["AppBuilder", "TransportMode", "build_mcp_app", "setup_mcp_subapp"]
 
 logger = logging.getLogger(__name__)
+
+
+class TransportMode(str, Enum):
+    """Transport modes for MCP server deployment."""
+
+    SSE = "sse"
+    STREAMABLE = "streamable"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class AppBuilder:
     """Aiohttp application builder for MCP server."""
 
-    __slots__ = ("_mcp", "_path", "_sse")
+    __slots__ = ("_mcp", "_path", "_session_manager", "_sse", "_transport_mode")
 
-    def __init__(self, mcp: AiohttpMCP, path: str = "/mcp") -> None:
+    def __init__(
+        self,
+        *,
+        mcp: AiohttpMCP,
+        path: str = "/mcp",
+        transport_mode: TransportMode = TransportMode.SSE,
+        json_response: bool = False,
+        stateless: bool = False,
+    ) -> None:
         self._mcp = mcp
-        self._sse = SSEServerTransport(path)
         self._path = path
+
+        self._sse: SSEServerTransport | None = None
+        self._session_manager: StreamableHTTPSessionManager | None = None
+
+        self._transport_mode = transport_mode
+
+        if transport_mode == TransportMode.SSE:
+            self._sse: SSEServerTransport | None = SSEServerTransport(path)
+        elif transport_mode == TransportMode.STREAMABLE:
+            self._session_manager = StreamableHTTPSessionManager(
+                server=self._mcp.server,
+                event_store=self._mcp.event_store,
+                json_response=json_response,
+                stateless=stateless,
+            )
+        else:
+            raise ValueError(f"Unsupported transport mode: {transport_mode}")
 
     @property
     def path(self) -> str:
@@ -44,8 +81,17 @@ class AppBuilder:
         2. POST: Handles incoming messages.
         """
         # Use empty path due to building the app to use as a subapp with a prefix
-        app.router.add_get(path, self.sse_handler)
-        app.router.add_post(path, self.message_handler)
+        if self._transport_mode == TransportMode.SSE:
+            app.router.add_get(path, self.sse_handler)
+            app.router.add_post(path, self.message_handler)
+        elif self._transport_mode == TransportMode.STREAMABLE:
+
+            async def _setup_session_manager(_app: web.Application) -> AsyncIterator[None]:
+                async with self._session_manager.run():
+                    yield
+
+            app.cleanup_ctx.append(_setup_session_manager)
+            app.router.add_route("*", path, self.streamable_http_handler)
 
     async def sse_handler(self, request: web.Request) -> EventSourceResponse:
         """Handle the SSE connection and start the MCP server."""
@@ -62,14 +108,27 @@ class AppBuilder:
         """Handle incoming messages from the client."""
         return await self._sse.handle_post_message(request)
 
+    async def streamable_http_handler(self, request: web.Request) -> web.StreamResponse:
+        """Handle requests in streamable HTTP mode."""
+        return await self._session_manager.handle_request(request)
+
 
 def build_mcp_app(
     mcp_registry: AiohttpMCP,
     path: str = "/mcp",
     is_subapp: bool = False,
+    transport_mode: TransportMode = TransportMode.SSE,
+    json_response: bool = False,
+    stateless: bool = False,
 ) -> web.Application:
     """Build the MCP server application."""
-    return AppBuilder(mcp_registry, path).build(is_subapp=is_subapp)
+    return AppBuilder(
+        mcp=mcp_registry,
+        path=path,
+        transport_mode=transport_mode,
+        json_response=json_response,
+        stateless=stateless,
+    ).build(is_subapp=is_subapp)
 
 
 def setup_mcp_subapp(

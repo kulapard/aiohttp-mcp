@@ -45,6 +45,7 @@ class Event:
 
     event_type: EventType
     data: str
+    event_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

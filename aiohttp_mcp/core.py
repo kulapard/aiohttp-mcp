@@ -20,6 +20,8 @@ from mcp.types import (
 )
 from pydantic import AnyUrl
 
+from aiohttp_mcp.streamable_http import EventStore
+
 logger = logging.getLogger(__name__)
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -36,10 +38,12 @@ class AiohttpMCP:
         warn_on_duplicate_tools: bool = True,
         warn_on_duplicate_prompts: bool = True,
         lifespan: Callable[[FastMCP], AbstractAsyncContextManager[LifespanResultT]] | None = None,
+        event_store: EventStore | None = None,
     ) -> None:
         self._fastmcp = FastMCP(
             name=name,
             instructions=instructions,
+            event_store=event_store,
             debug=debug,
             log_level=log_level,
             warn_on_duplicate_resources=warn_on_duplicate_resources,
@@ -48,10 +52,15 @@ class AiohttpMCP:
             lifespan=lifespan,
         )
         self._app: web.Application | None = None
+        self._event_store = event_store
 
     @property
     def server(self) -> Server[Any]:
         return self._fastmcp._mcp_server
+
+    @property
+    def event_store(self) -> EventStore | None:
+        return self._event_store
 
     @property
     def app(self) -> web.Application:
