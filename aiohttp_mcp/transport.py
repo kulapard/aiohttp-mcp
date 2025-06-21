@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import Enum
 from http import HTTPStatus
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -30,6 +30,9 @@ from mcp.types import (
     JSONRPCRequest,
 )
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from .core import AiohttpMCP
 
 __all__ = [
     "Event",
@@ -272,11 +275,14 @@ class StatelessStreamableHTTPTransport:
     No session management - each request is processed independently.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, mcp: "AiohttpMCP") -> None:
         """
         Initialize a new stateless streamable HTTP transport.
+
+        Args:
+            mcp: The MCP server instance for processing requests.
         """
-        pass
+        self._mcp = mcp
 
     def _create_error_response(
         self,
@@ -316,10 +322,7 @@ class StatelessStreamableHTTPTransport:
         if headers:
             response_headers.update(headers)
 
-        response_text = (
-            response_message.model_dump_json(by_alias=True, exclude_none=True)
-            if response_message else None
-        )
+        response_text = response_message.model_dump_json(by_alias=True, exclude_none=True) if response_message else None
 
         return web.Response(
             text=response_text,
@@ -342,10 +345,7 @@ class StatelessStreamableHTTPTransport:
 
         if protocol_version not in SUPPORTED_PROTOCOL_VERSIONS:
             supported_versions = ", ".join(SUPPORTED_PROTOCOL_VERSIONS)
-            return (
-                f"Unsupported protocol version: {protocol_version}. "
-                f"Supported versions: {supported_versions}"
-            )
+            return f"Unsupported protocol version: {protocol_version}. Supported versions: {supported_versions}"
 
         return None
 
@@ -393,9 +393,7 @@ class StatelessStreamableHTTPTransport:
             try:
                 raw_message = json.loads(body)
             except json.JSONDecodeError as e:
-                return self._create_error_response(
-                    f"Parse error: {e!s}", HTTPStatus.BAD_REQUEST, PARSE_ERROR
-                )
+                return self._create_error_response(f"Parse error: {e!s}", HTTPStatus.BAD_REQUEST, PARSE_ERROR)
 
             try:
                 message = JSONRPCMessage.model_validate(raw_message)
@@ -437,9 +435,7 @@ class StatelessStreamableHTTPTransport:
         ]
     ]:
         """Context manager that provides read and write streams for a connection."""
-        read_stream_writer, read_stream = anyio.create_memory_object_stream[
-            SessionMessage | Exception
-        ](0)
+        read_stream_writer, read_stream = anyio.create_memory_object_stream[SessionMessage | Exception](0)
         write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
 
         try:
@@ -449,3 +445,68 @@ class StatelessStreamableHTTPTransport:
             await read_stream.aclose()
             await write_stream_reader.aclose()
             await write_stream.aclose()
+
+    async def handle_mcp_request(self, request: web.Request) -> web.Response:
+        """Handle streamable HTTP requests with full MCP server integration."""
+        return await self._process_streamable_request(request)
+
+    async def _process_streamable_request(self, request: web.Request) -> web.Response:
+        """Process a stateless request through the MCP server."""
+        async with self.connect() as (read_stream, write_stream):
+            try:
+                return await self._run_streamable_session(request, read_stream, write_stream)
+            except Exception as e:
+                logger.exception("Error processing streamable request")
+                return self._create_streamable_error_response(f"Error processing request: {e!s}")
+
+    async def _run_streamable_session(
+        self,
+        request: web.Request,
+        read_stream: MemoryObjectReceiveStream[SessionMessage | Exception],
+        write_stream: MemoryObjectSendStream[SessionMessage],
+    ) -> web.Response:
+        """Run the MCP server session for a streamable request."""
+        async with anyio.create_task_group() as tg:
+            response_holder: dict[str, web.Response | Exception | None] = {"response": None, "error": None}
+
+            async def run_server() -> None:
+                try:
+                    await self._mcp.server.run(
+                        read_stream=read_stream,
+                        write_stream=write_stream,
+                        initialization_options=self._mcp.server.create_initialization_options(),
+                        raise_exceptions=True,
+                    )
+                except Exception as e:
+                    response_holder["error"] = e
+                    tg.cancel_scope.cancel()
+
+            async def handle_http() -> None:
+                try:
+                    response = await self.handle_request(request)
+                    response_holder["response"] = response
+                    tg.cancel_scope.cancel()
+                except Exception as e:
+                    response_holder["error"] = e
+                    tg.cancel_scope.cancel()
+
+            tg.start_soon(run_server)
+            tg.start_soon(handle_http)
+
+        return self._handle_streamable_response(response_holder)
+
+    def _handle_streamable_response(self, response_holder: dict[str, web.Response | Exception | None]) -> web.Response:
+        """Handle the response from a streamable request."""
+        if response_holder["error"]:
+            logger.exception("Error in streamable request processing")
+            return self._create_streamable_error_response(f"Server error: {response_holder['error']!s}")
+
+        response = response_holder["response"]
+        if isinstance(response, web.Response):
+            return response
+
+        return self._create_streamable_error_response("No response generated")
+
+    def _create_streamable_error_response(self, message: str) -> web.Response:
+        """Create an error response for streamable transport."""
+        return self._create_error_response(message, HTTPStatus.INTERNAL_SERVER_ERROR)

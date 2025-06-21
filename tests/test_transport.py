@@ -280,11 +280,17 @@ class TestSSEServerTransport:
 
 class TestStatelessStreamableHTTPTransport:
     def test_initialization(self) -> None:
-        transport = StatelessStreamableHTTPTransport()
+        from aiohttp_mcp.core import AiohttpMCP
+
+        mcp = AiohttpMCP()
+        transport = StatelessStreamableHTTPTransport(mcp)
         assert transport is not None
 
     async def test_connect_context_manager(self) -> None:
-        transport = StatelessStreamableHTTPTransport()
+        from aiohttp_mcp.core import AiohttpMCP
+
+        mcp = AiohttpMCP()
+        transport = StatelessStreamableHTTPTransport(mcp)
         async with transport.connect() as (read_stream, write_stream):
             assert isinstance(read_stream, MemoryObjectReceiveStream)
             assert isinstance(write_stream, MemoryObjectSendStream)

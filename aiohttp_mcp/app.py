@@ -1,7 +1,5 @@
 import logging
-from http import HTTPStatus
 
-import anyio
 from aiohttp import web
 
 from .core import AiohttpMCP
@@ -29,7 +27,7 @@ class AppBuilder:
             self._streamable: StatelessStreamableHTTPTransport | None = None
         elif transport_mode == TransportMode.STREAMABLE:
             self._sse = None
-            self._streamable = StatelessStreamableHTTPTransport()
+            self._streamable = StatelessStreamableHTTPTransport(mcp)
         else:
             raise ValueError(f"Unsupported transport mode: {transport_mode}")
 
@@ -87,78 +85,8 @@ class AppBuilder:
         if self._streamable is None:
             raise RuntimeError("Streamable transport not initialized")
 
-        # Process the request through a complete MCP server session
-        return await self._process_streamable_request(request)
-
-    async def _process_streamable_request(self, request: web.Request) -> web.Response:
-        """Process a stateless request through the MCP server."""
-        if self._streamable is None:
-            return web.Response(text="Transport not available", status=500)
-
-        async with self._streamable.connect() as (read_stream, write_stream):
-            try:
-                # Create a task group to run the server and handle the request
-                async with anyio.create_task_group() as tg:
-                    response_holder: dict[str, web.Response | Exception | None] = {"response": None, "error": None}
-
-                    # Start the MCP server
-                    async def run_server() -> None:
-                        try:
-                            await self._mcp.server.run(
-                                read_stream=read_stream,
-                                write_stream=write_stream,
-                                initialization_options=self._mcp.server.create_initialization_options(),
-                                raise_exceptions=True,
-                            )
-                        except Exception as e:
-                            response_holder["error"] = e
-                            tg.cancel_scope.cancel()
-
-                    # Handle the HTTP request
-                    async def handle_http() -> None:
-                        try:
-                            if self._streamable is not None:
-                                response = await self._streamable.handle_request(request)
-                                response_holder["response"] = response
-                            tg.cancel_scope.cancel()
-                        except Exception as e:
-                            response_holder["error"] = e
-                            tg.cancel_scope.cancel()
-
-                    tg.start_soon(run_server)
-                    tg.start_soon(handle_http)
-
-                # Return the response or error
-                if response_holder["error"]:
-                    logger.exception("Error in streamable request processing")
-                    if self._streamable is not None:
-                        return self._streamable._create_error_response(
-                            f"Server error: {response_holder['error']!s}",
-                            HTTPStatus.INTERNAL_SERVER_ERROR,
-                        )
-                    else:
-                        return web.Response(text="Internal Server Error", status=500)
-
-                response = response_holder["response"]
-                if isinstance(response, web.Response):
-                    return response
-                elif self._streamable is not None:
-                    return self._streamable._create_error_response(
-                        "No response generated",
-                        HTTPStatus.INTERNAL_SERVER_ERROR,
-                    )
-                else:
-                    return web.Response(text="Error", status=500)
-
-            except Exception as e:
-                logger.exception("Error processing streamable request")
-                if self._streamable is not None:
-                    return self._streamable._create_error_response(
-                        f"Error processing request: {e!s}",
-                        HTTPStatus.INTERNAL_SERVER_ERROR,
-                    )
-                else:
-                    return web.Response(text="Internal Server Error", status=500)
+        # Delegate to the transport's MCP request handler
+        return await self._streamable.handle_mcp_request(request)
 
 
 def build_mcp_app(
