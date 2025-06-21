@@ -7,6 +7,7 @@ import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from mcp.shared.message import ServerMessageMetadata, SessionMessage
 from mcp.types import JSONRPCMessage, JSONRPCRequest
 
 from aiohttp_mcp.transport import (
@@ -29,8 +30,8 @@ def transport() -> SSEServerTransport:
 
 
 async def echo(
-    reader: MemoryObjectReceiveStream[types.JSONRPCMessage | Exception],
-    writer: MemoryObjectSendStream[types.JSONRPCMessage | Exception],
+    reader: MemoryObjectReceiveStream[SessionMessage | Exception],
+    writer: MemoryObjectSendStream[SessionMessage | Exception],
 ) -> None:
     """Send messages from reader to writer."""
     async for message in reader:
@@ -61,13 +62,22 @@ async def aiohttp_client(app: web.Application) -> AsyncIterator[TestClient[web.R
 
 
 @pytest.fixture
-def valid_message() -> JSONRPCRequest:
-    return types.JSONRPCRequest(jsonrpc="2.0", id=1, method="test", params={"foo": "bar"})
+def valid_message() -> JSONRPCMessage:
+    return types.JSONRPCMessage(root=types.JSONRPCRequest(jsonrpc="2.0", id=1, method="test", params={"foo": "bar"}))
+
+
+@pytest.fixture
+def valid_session_message(valid_message: JSONRPCMessage) -> SessionMessage:
+    """Create a valid session message from a JSONRPCRequest."""
+    return SessionMessage(
+        message=valid_message,
+        metadata=ServerMessageMetadata(),
+    )
 
 
 class TestMessageConverter:
-    def test_to_string_with_jsonrpc_message(self, valid_message: JSONRPCMessage) -> None:
-        result = MessageConverter.to_string(valid_message)
+    def test_to_string_with_jsonrpc_message(self, valid_session_message: SessionMessage) -> None:
+        result = MessageConverter.to_string(valid_session_message)
         assert isinstance(result, str)
         assert "id" in result
         assert "method" in result
@@ -78,8 +88,8 @@ class TestMessageConverter:
         result = MessageConverter.to_string(msg)
         assert result == "test error"
 
-    def test_to_event_with_jsonrpc_message(self, valid_message: JSONRPCMessage) -> None:
-        event = MessageConverter.to_event(valid_message)
+    def test_to_event_with_jsonrpc_message(self, valid_session_message: SessionMessage) -> None:
+        event = MessageConverter.to_event(valid_session_message)
         assert isinstance(event, Event)
         assert event.event_type == EventType.MESSAGE
         assert "id" in event.data
@@ -99,7 +109,7 @@ class TestMessageConverter:
         assert isinstance(msg, JSONRPCMessage)
         request = msg.root
         assert isinstance(request, JSONRPCRequest)
-        assert request.id == "1"  # Access id through the root object
+        assert request.id == 1  # Access id through the root object
         assert request.method == "test"
         assert request.jsonrpc == "2.0"
 

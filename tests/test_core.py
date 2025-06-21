@@ -43,7 +43,7 @@ async def test_list_resources(mcp: AiohttpMCP) -> None:
     # Check static resource
     static_resource = resources[0]
     assert str(static_resource.uri) == "config://my-config"
-    assert static_resource.name == "config://my-config"  # Name is the URI when not explicitly provided
+    assert static_resource.name == "config_resource"  # Name is the URI when not explicitly provided
     assert static_resource.description == "Return a config resource. This is static resource"
 
 

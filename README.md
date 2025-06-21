@@ -168,7 +168,7 @@ uv run pytest
 - aiohttp >= 3.9.0, < 4.0.0
 - aiohttp-sse >= 2.2.0, < 3.0.0
 - anyio >= 4.9.0, < 5.0.0
-- mcp >= 1.6.0, < 2.0.0
+- mcp >= 1.8.0, < 2.0.0
 
 ## License
 
