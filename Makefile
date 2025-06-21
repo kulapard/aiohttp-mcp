@@ -96,13 +96,15 @@ help:
 	@echo "  make run-server              - Run basic MCP server"
 	@echo "  make run-server-custom       - Run custom MCP server"
 	@echo "  make run-server-subapp       - Run MCP sub-application server"
-	@echo "  make run-streamable-server   - Run Streamable HTTP MCP server"
+	@echo "  make run-server-streamable   - Run Streamable HTTP MCP server"
 	@echo "  make run-client              - Run MCP client"
-	@echo "  make run-streamable-client   - Run Streamable HTTP MCP client"
 	@echo "  make run-inspector           - Run MCP inspector"
 
 run-inspector:
 	npx @modelcontextprotocol/inspector
+
+run-client:
+	uv run examples/client.py
 
 run-server:
 	uv run examples/server.py
@@ -113,11 +115,5 @@ run-server-custom:
 run-server-subapp:
 	uv run examples/server_subapp.py
 
-run-client:
-	uv run examples/client.py
-
-run-streamable-server:
-	uv run examples/streamable_http_server.py
-
-run-streamable-client:
-	uv run examples/streamable_http_client.py
+run-server-streamable:
+	uv run examples/server_streamable_http.py

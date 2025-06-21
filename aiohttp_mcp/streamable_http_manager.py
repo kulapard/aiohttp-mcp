@@ -14,10 +14,10 @@ import anyio
 from aiohttp import web
 from anyio.abc import TaskStatus
 from mcp.server.lowlevel.server import Server as MCPServer
+from mcp.server.streamable_http import EventStore
 
 from .streamable_http import (
     MCP_SESSION_ID_HEADER,
-    EventStore,
     StreamableHTTPServerTransport,
 )
 
@@ -69,7 +69,7 @@ class StreamableHTTPSessionManager:
         self._server_instances: dict[str, StreamableHTTPServerTransport] = {}
 
         # The task group will be set during lifespan
-        self._task_group = None
+        self._task_group: anyio.abc.TaskGroup | None = None
         # Thread-safe tracking of run() calls
         self._run_lock = threading.Lock()
         self._has_started = False
@@ -159,7 +159,7 @@ class StreamableHTTPSessionManager:
         )
 
         # Start server in a new task
-        async def run_stateless_server(*, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED):
+        async def run_stateless_server(*, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
             async with http_transport.connect() as streams:
                 read_stream, write_stream = streams
                 task_status.started()

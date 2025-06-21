@@ -47,7 +47,7 @@ class AppBuilder:
         self._transport_mode = transport_mode
 
         if transport_mode == TransportMode.SSE:
-            self._sse: SSEServerTransport | None = SSEServerTransport(path)
+            self._sse = SSEServerTransport(path)
         elif transport_mode == TransportMode.STREAMABLE:
             self._session_manager = StreamableHTTPSessionManager(
                 server=self._mcp.server,
@@ -87,6 +87,8 @@ class AppBuilder:
         elif self._transport_mode == TransportMode.STREAMABLE:
 
             async def _setup_session_manager(_app: web.Application) -> AsyncIterator[None]:
+                if self._session_manager is None:
+                    raise RuntimeError("Session manager not initialized")
                 async with self._session_manager.run():
                     yield
 
@@ -95,6 +97,8 @@ class AppBuilder:
 
     async def sse_handler(self, request: web.Request) -> EventSourceResponse:
         """Handle the SSE connection and start the MCP server."""
+        if self._sse is None:
+            raise RuntimeError("SSE transport not initialized")
         async with self._sse.connect_sse(request) as sse_connection:
             await self._mcp.server.run(
                 read_stream=sse_connection.read_stream,
@@ -106,10 +110,14 @@ class AppBuilder:
 
     async def message_handler(self, request: web.Request) -> web.Response:
         """Handle incoming messages from the client."""
+        if self._sse is None:
+            raise RuntimeError("SSE transport not initialized")
         return await self._sse.handle_post_message(request)
 
     async def streamable_http_handler(self, request: web.Request) -> web.StreamResponse:
         """Handle requests in streamable HTTP mode."""
+        if self._session_manager is None:
+            raise RuntimeError("Session manager not initialized")
         return await self._session_manager.handle_request(request)
 
 

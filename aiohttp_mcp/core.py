@@ -8,6 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.lowlevel import Server
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.lowlevel.server import LifespanResultT
+from mcp.server.streamable_http import EventStore
 from mcp.types import (
     AnyFunction,
     Content,
@@ -19,8 +20,6 @@ from mcp.types import (
     ToolAnnotations,
 )
 from pydantic import AnyUrl
-
-from aiohttp_mcp.streamable_http import EventStore
 
 logger = logging.getLogger(__name__)
 

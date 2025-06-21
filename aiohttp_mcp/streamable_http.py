@@ -10,16 +10,15 @@ responses, with streaming support for long-running operations.
 import json
 import logging
 import re
-from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
 from http import HTTPStatus
 
 import anyio
 from aiohttp import web
 from aiohttp_sse import sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from mcp.server.streamable_http import EventMessage, EventStore
 from mcp.shared.message import ServerMessageMetadata, SessionMessage
 from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
 from mcp.types import (
@@ -61,61 +60,6 @@ GET_STREAM_KEY = "_GET_stream"
 # Session ID validation pattern (visible ASCII characters ranging from 0x21 to 0x7E)
 # Pattern ensures entire string contains only valid characters by using ^ and $ anchors
 SESSION_ID_PATTERN = re.compile(r"^[\x21-\x7E]+$")
-
-# Type aliases
-StreamId = str
-EventId = str
-
-
-@dataclass
-class EventMessage:
-    """
-    A JSONRPCMessage with an optional event ID for stream resumability.
-    """
-
-    message: JSONRPCMessage
-    event_id: str | None = None
-
-
-EventCallback = Callable[[EventMessage], Awaitable[None]]
-
-
-class EventStore(ABC):
-    """
-    Interface for resumability support via event storage.
-    """
-
-    @abstractmethod
-    async def store_event(self, stream_id: StreamId, message: JSONRPCMessage) -> EventId:
-        """
-        Stores an event for later retrieval.
-
-        Args:
-            stream_id: ID of the stream the event belongs to
-            message: The JSON-RPC message to store
-
-        Returns:
-            The generated event ID for the stored event
-        """
-        pass
-
-    @abstractmethod
-    async def replay_events_after(
-        self,
-        last_event_id: EventId,
-        send_callback: EventCallback,
-    ) -> StreamId | None:
-        """
-        Replays events that occurred after the specified event ID.
-
-        Args:
-            last_event_id: The ID of the last event the client received
-            send_callback: A callback function to send events to the client
-
-        Returns:
-            The stream ID of the replayed events
-        """
-        pass
 
 
 class StreamableHTTPServerTransport:
@@ -409,7 +353,7 @@ class StreamableHTTPServerTransport:
                 # Create SSE stream
                 sse_stream_writer, sse_stream_reader = anyio.create_memory_object_stream[Event](0)
 
-                async def _sse_writer():
+                async def _sse_writer() -> None:
                     try:
                         async with sse_stream_writer, request_stream_reader:
                             # Process messages from the request-specific stream
@@ -430,20 +374,10 @@ class StreamableHTTPServerTransport:
                         logger.debug("Closing SSE writer")
                         await self._clean_up_memory_streams(request_id)
 
-                async def _process_response() -> None:
-                    """Redirect messages from the SSE stream to the response."""
-                    logger.debug("Starting SSE stream processor")
-                    async with sse_stream_reader:
-                        async for event in sse_stream_reader:
-                            logger.debug("Sending event via SSE: %s", event)
-                            await response.send(data=event.data, event=event.event_type, id=event.event_id)
-                            logger.debug("Sent event via SSE: %s", event)
-
                 # Start the SSE response (this will send headers immediately)
                 try:
                     # First send the response to establish the SSE connection
-                    async with sse_response(request) as response:
-                        # Create and start EventSourceResponse
+                    async with sse_response(request) as sse_resp:  # Create and start EventSourceResponse
                         # SSE stream mode (original behavior)
                         # Set up headers
                         headers = {
@@ -452,7 +386,7 @@ class StreamableHTTPServerTransport:
                             "Content-Type": CONTENT_TYPE_SSE,
                             **({MCP_SESSION_ID_HEADER: self.mcp_session_id} if self.mcp_session_id else {}),
                         }
-                        response.headers.update(headers)
+                        sse_resp.headers.update(headers)
 
                         async with anyio.create_task_group() as tg:
                             # https://trio.readthedocs.io/en/latest/reference-core.html#custom-supervisors
@@ -460,18 +394,30 @@ class StreamableHTTPServerTransport:
                                 await coro()
                                 tg.cancel_scope.cancel()
 
-                            tg.start_soon(cancel_on_finish, _process_response)
+                            async def _process_response_inner() -> None:
+                                """Redirect messages from the SSE stream to the response."""
+                                logger.debug("Starting SSE stream processor")
+                                async with sse_stream_reader:
+                                    async for event in sse_stream_reader:
+                                        logger.debug("Sending event via SSE: %s", event)
+                                        await sse_resp.send(data=event.data, event=event.event_type, id=event.event_id)
+                                        logger.debug("Sent event via SSE: %s", event)
+
+                            tg.start_soon(cancel_on_finish, _process_response_inner)
                             tg.start_soon(cancel_on_finish, _sse_writer)
 
                             # Then send the message to be processed by the server
                             metadata = ServerMessageMetadata(request_context=request)
                             session_message = SessionMessage(message, metadata=metadata)
                             await writer.send(session_message)
+
+                        return sse_resp
                 except Exception:
                     logger.exception("SSE response error")
                     await sse_stream_writer.aclose()
                     await sse_stream_reader.aclose()
                     await self._clean_up_memory_streams(request_id)
+                    raise
 
         except Exception as err:
             logger.exception("Error handling POST request")
@@ -531,7 +477,7 @@ class StreamableHTTPServerTransport:
         # Create SSE stream
         sse_stream_writer, sse_stream_reader = anyio.create_memory_object_stream[Event](0)
 
-        async def standalone_sse_writer():
+        async def standalone_sse_writer() -> None:
             try:
                 # Create a standalone message stream for server-initiated messages
 
@@ -555,20 +501,10 @@ class StreamableHTTPServerTransport:
                 logger.debug("Closing standalone SSE writer")
                 await self._clean_up_memory_streams(GET_STREAM_KEY)
 
-        async def _process_response() -> None:
-            """Redirect messages from the SSE stream to the response."""
-            logger.debug("Starting SSE stream processor")
-            async with sse_stream_reader:
-                async for event in sse_stream_reader:
-                    logger.debug("Sending event via SSE: %s", event)
-                    await response.send(data=event.data, event=event.event_type, id=event.event_id)
-                    logger.debug("Sent event via SSE: %s", event)
-
         try:
             # This will send headers immediately and establish the SSE connection
-            async with sse_response(request) as response:
-                # Set up headers
-                response.headers.update(headers)
+            async with sse_response(request) as sse_resp:  # Set up headers
+                sse_resp.headers.update(headers)
 
                 async with anyio.create_task_group() as tg:
                     # https://trio.readthedocs.io/en/latest/reference-core.html#custom-supervisors
@@ -576,13 +512,25 @@ class StreamableHTTPServerTransport:
                         await coro()
                         tg.cancel_scope.cancel()
 
-                    tg.start_soon(cancel_on_finish, _process_response)
+                    async def _process_response_inner() -> None:
+                        """Redirect messages from the SSE stream to the response."""
+                        logger.debug("Starting SSE stream processor")
+                        async with sse_stream_reader:
+                            async for event in sse_stream_reader:
+                                logger.debug("Sending event via SSE: %s", event)
+                                await sse_resp.send(data=event.data, event=event.event_type, id=event.event_id)
+                                logger.debug("Sent event via SSE: %s", event)
+
+                    tg.start_soon(cancel_on_finish, _process_response_inner)
                     tg.start_soon(cancel_on_finish, standalone_sse_writer)
+
+                return sse_resp
         except Exception as e:
             logger.exception("Error in standalone SSE response: %s", e)
             await sse_stream_writer.aclose()
             await sse_stream_reader.aclose()
             await self._clean_up_memory_streams(GET_STREAM_KEY)
+            raise
 
     async def _handle_delete_request(self, request: web.Request) -> web.StreamResponse:
         """Handle DELETE requests for explicit session termination."""
@@ -731,7 +679,7 @@ class StreamableHTTPServerTransport:
             # Create SSE stream for replay
             sse_stream_writer, sse_stream_reader = anyio.create_memory_object_stream[Event](0)
 
-            async def replay_sender():
+            async def replay_sender() -> None:
                 try:
                     async with sse_stream_writer:
                         # Define an async callback for sending events
@@ -756,19 +704,9 @@ class StreamableHTTPServerTransport:
                 except Exception as e:
                     logger.exception("Error in replay sender: %s", e)
 
-            async def _process_response() -> None:
-                """Redirect messages from the SSE stream to the response."""
-                logger.debug("Starting SSE stream processor")
-                async with sse_stream_reader:
-                    async for event in sse_stream_reader:
-                        logger.debug("Sending event via SSE: %s", event)
-                        await response.send(data=event.data, event=event.event_type, id=event.event_id)
-                        logger.debug("Sent event via SSE: %s", event)
-
             try:
-                async with sse_response(request) as response:
-                    # Set up headers
-                    response.headers.update(headers)
+                async with sse_response(request) as sse_resp:  # Set up headers
+                    sse_resp.headers.update(headers)
 
                     async with anyio.create_task_group() as tg:
                         # https://trio.readthedocs.io/en/latest/reference-core.html#custom-supervisors
@@ -776,10 +714,22 @@ class StreamableHTTPServerTransport:
                             await coro()
                             tg.cancel_scope.cancel()
 
-                        tg.start_soon(cancel_on_finish, _process_response)
+                        async def _process_response_inner() -> None:
+                            """Redirect messages from the SSE stream to the response."""
+                            logger.debug("Starting SSE stream processor")
+                            async with sse_stream_reader:
+                                async for event in sse_stream_reader:
+                                    logger.debug("Sending event via SSE: %s", event)
+                                    await sse_resp.send(data=event.data, event=event.event_type, id=event.event_id)
+                                    logger.debug("Sent event via SSE: %s", event)
+
+                        tg.start_soon(cancel_on_finish, _process_response_inner)
                         tg.start_soon(cancel_on_finish, replay_sender)
+
+                    return sse_resp
             except Exception as e:
                 logger.exception("Error in replay response: %s", e)
+                raise
             finally:
                 await sse_stream_writer.aclose()
                 await sse_stream_reader.aclose()
@@ -822,7 +772,7 @@ class StreamableHTTPServerTransport:
         # Start a task group for message routing
         async with anyio.create_task_group() as tg:
             # Create a message router that distributes messages to request streams
-            async def message_router():
+            async def message_router() -> None:
                 try:
                     async for session_message in write_stream_reader:
                         # Determine which request stream(s) should receive this message

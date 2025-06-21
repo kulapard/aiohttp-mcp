@@ -7,7 +7,7 @@ from aiohttp_sse import EventSourceResponse
 from aiohttp_mcp import AiohttpMCP, AppBuilder
 
 mcp = AiohttpMCP()
-app_builder = AppBuilder(mcp, path="/mcp")
+app_builder = AppBuilder(mcp=mcp, path="/mcp")
 
 
 async def handle_sse(request: web.Request) -> EventSourceResponse:
