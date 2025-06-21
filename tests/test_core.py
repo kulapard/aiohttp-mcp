@@ -105,3 +105,28 @@ async def test_get_prompt(mcp: AiohttpMCP) -> None:
     assert prompt_result.messages[0].role == "user"
     assert isinstance(prompt_result.messages[0].content, TextContent)
     assert prompt_result.messages[0].content.text == "Please process this message: test message"
+
+
+async def test_app_property_error_before_setup() -> None:
+    """Test that accessing app property before setup raises RuntimeError."""
+    mcp = AiohttpMCP()
+
+    with pytest.raises(RuntimeError, match="Application has not been built yet. Call `setup_app\\(\\)` first."):
+        _ = mcp.app
+
+
+async def test_setup_app_twice_error() -> None:
+    """Test that calling setup_app twice raises RuntimeError."""
+    from aiohttp import web
+
+    mcp = AiohttpMCP()
+    app1 = web.Application()
+    app2 = web.Application()
+
+    # First setup should work
+    mcp.setup_app(app1)
+    assert mcp.app is app1
+
+    # Second setup should raise error
+    with pytest.raises(RuntimeError, match="Application has already been set. Cannot set it again."):
+        mcp.setup_app(app2)
