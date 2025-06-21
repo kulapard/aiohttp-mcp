@@ -9,13 +9,11 @@ from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.lowlevel.server import LifespanResultT
 from mcp.types import (
     AnyFunction,
-    EmbeddedResource,
+    Content,
     GetPromptResult,
-    ImageContent,
     Prompt,
     Resource,
     ResourceTemplate,
-    TextContent,
     Tool,
 )
 from pydantic import AnyUrl
@@ -87,9 +85,7 @@ class AiohttpMCP:
         """List all available prompts."""
         return await self._fastmcp.list_prompts()
 
-    async def call_tool(
-        self, name: str, arguments: dict[str, Any]
-    ) -> Sequence[TextContent | ImageContent | EmbeddedResource]:
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Sequence[Content]:
         """Call a tool by name with arguments."""
         return await self._fastmcp.call_tool(name, arguments)
 
