@@ -84,3 +84,6 @@ def setup_mcp_subapp(
 
     mcp_app = build_mcp_app(mcp_registry, prefix, is_subapp=True)
     app.add_subapp(prefix, mcp_app)
+
+    # Store the main app in the MCP registry for access from tools
+    mcp_registry.setup_app(app)

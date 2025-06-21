@@ -13,6 +13,7 @@ import mcp.types as types
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from mcp.shared.message import ServerMessageMetadata, SessionMessage
 from pydantic import ValidationError
 
 __all__ = [
@@ -50,8 +51,8 @@ class Event:
 class SSEConnection:
     """A class to manage the connection for SSE."""
 
-    read_stream: MemoryObjectReceiveStream[types.JSONRPCMessage | Exception]
-    write_stream: MemoryObjectSendStream[types.JSONRPCMessage | Exception]
+    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
+    write_stream: MemoryObjectSendStream[SessionMessage | Exception]
     request: web.Request
     response: EventSourceResponse
 
@@ -101,16 +102,16 @@ class MessageConverter:
     """Converts between different message formats."""
 
     @staticmethod
-    def to_string(msg: types.JSONRPCMessage | Exception) -> str:
-        """Convert message to string."""
-        if isinstance(msg, types.JSONRPCMessage):
-            return msg.model_dump_json(by_alias=True, exclude_none=True)
-        return str(msg)
+    def to_string(session_message: SessionMessage | Exception) -> str:
+        """Convert session_message to string."""
+        if isinstance(session_message, SessionMessage):
+            return session_message.message.model_dump_json(by_alias=True, exclude_none=True)
+        return str(session_message)
 
     @staticmethod
-    def to_event(msg: types.JSONRPCMessage | Exception, event_type: EventType = EventType.MESSAGE) -> Event:
-        """Convert message to SSE event."""
-        data = MessageConverter.to_string(msg)
+    def to_event(session_message: SessionMessage | Exception, event_type: EventType = EventType.MESSAGE) -> Event:
+        """Convert session_message to SSE event."""
+        data = MessageConverter.to_string(session_message)
         return Event(event_type=event_type, data=data)
 
     @staticmethod
@@ -125,7 +126,7 @@ class SSEServerTransport:
     def __init__(self, message_path: str, send_timeout: float | None = None) -> None:
         self._message_path = message_path
         self._send_timeout = send_timeout
-        self._out_streams: dict[uuid.UUID, Stream[types.JSONRPCMessage | Exception]] = {}
+        self._out_streams: dict[uuid.UUID, Stream[SessionMessage | Exception]] = {}
 
     def _create_session_uri(self, session_id: UUID) -> str:
         """Create a session URI from a session ID."""
@@ -136,8 +137,8 @@ class SSEServerTransport:
         logger.info("Setting up SSE connection")
 
         # Input and output streams
-        in_stream = Stream[types.JSONRPCMessage | Exception].create()
-        out_stream = Stream[types.JSONRPCMessage | Exception].create()
+        in_stream = Stream[SessionMessage | Exception].create()
+        out_stream = Stream[SessionMessage | Exception].create()
 
         # Internal event stream for SSE
         sse_stream = Stream[Event].create()
@@ -234,6 +235,8 @@ class SSEServerTransport:
             await out_stream.writer.send(err)
             return web.Response(text="Could not parse message", status=400)
 
+        metadata = ServerMessageMetadata(request_context=request)
+        session_message = SessionMessage(message, metadata=metadata)
         logger.debug("Sending message to writer: %s", message)
-        await out_stream.writer.send(message)
+        await out_stream.writer.send(session_message)
         return web.Response(text="Accepted", status=202)
