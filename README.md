@@ -122,7 +122,7 @@ def get_time(timezone: str) -> str:
 
 
 # Create application with streamable transport
-app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE, stateless=True)
+app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE_HTTP, stateless=True)
 web.run_app(app)
 ```
 
