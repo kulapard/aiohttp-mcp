@@ -1,4 +1,47 @@
-"""StreamableHTTP Session Manager for MCP servers."""
+"""
+StreamableHTTP Session Manager for MCP Servers
+
+This module provides high-level session management for FastMCP-compatible
+StreamableHTTP transports. It orchestrates multiple client sessions,
+handles session lifecycle, and provides both stateful and stateless
+operation modes for production deployment scenarios.
+
+The StreamableHTTPSessionManager serves as the orchestration layer between
+aiohttp web requests and the underlying MCP server instances, automatically
+managing transport creation, session tracking, and request routing.
+
+Key Features:
+- **Dual Operation Modes**: Stateful (with session persistence) and stateless (fresh per request)
+- **Session Lifecycle Management**: Automatic creation, tracking, and cleanup of client sessions
+- **Event Store Integration**: Optional resumability support for reconnection scenarios
+- **Concurrent Session Handling**: Thread-safe management of multiple simultaneous client sessions
+- **Resource Management**: Proper cleanup and task group management for production deployments
+
+Architecture:
+- **Session Manager**: High-level orchestrator (this module)
+- **Transport Layer**: StreamableHTTPServerTransport instances per session
+- **MCP Server**: Underlying FastMCP server instances
+- **Task Management**: anyio task groups for concurrent session handling
+
+Operation Modes:
+1. **Stateful Mode** (default):
+   - Sessions persist between requests
+   - Session IDs track client state
+   - Supports resumability with event stores
+   - Optimal for persistent client connections
+
+2. **Stateless Mode**:
+   - Fresh transport created per request
+   - No session persistence or tracking
+   - Suitable for load-balanced deployments
+   - Lower memory overhead for high-throughput scenarios
+
+Usage Patterns:
+- **Single Instance Deployment**: Use stateful mode with optional event store
+- **Load Balanced Deployment**: Use stateless mode for horizontal scaling
+- **Development/Testing**: Either mode works, stateless is simpler for testing
+- **High Availability**: Stateful with event store for seamless failover
+"""
 
 from __future__ import annotations
 
@@ -26,30 +69,28 @@ logger = logging.getLogger(__name__)
 
 class StreamableHTTPSessionManager:
     """
-    Manages StreamableHTTP sessions with optional resumability via event store.
+    Session orchestrator for StreamableHTTP transports with dual operation modes.
 
-    This class abstracts away the complexity of session management, event storage,
-    and request handling for StreamableHTTP transports. It handles:
+    Manages multiple client sessions and routes requests to appropriate transport
+    instances. Supports both stateful (persistent sessions) and stateless
+    (fresh per request) operation modes.
 
-    1. Session tracking for clients
-    2. Resumability via an optional event store
-    3. Connection management and lifecycle
-    4. Request handling and transport setup
-
-    Important: Only one StreamableHTTPSessionManager instance should be created
-    per application. The instance cannot be reused after its run() context has
-    completed. If you need to restart the manager, create a new instance.
+    Important: Each instance can only call run() once. Create new instances
+    for subsequent operations.
 
     Args:
-        server: The MCP server instance
-        event_store: Optional event store for resumability support.
-                     If provided, enables resumable connections where clients
-                     can reconnect and receive missed events.
-                     If None, sessions are still tracked but not resumable.
-        json_response: Whether to use JSON responses instead of SSE streams
-        stateless: If True, creates a completely fresh transport for each request
-                   with no session tracking or state persistence between requests.
+        server: FastMCP server instance for MCP protocol operations
+        event_store: Optional event store for resumability (default: None)
+        json_response: Use JSON responses instead of SSE streams (default: False)
+        stateless: Create fresh transport per request (default: False)
 
+    Example:
+        ```python
+        manager = StreamableHTTPSessionManager(server=mcp_server)
+
+        async with manager.run():
+            response = await manager.handle_request(request)
+        ```
     """
 
     def __init__(
@@ -58,7 +99,16 @@ class StreamableHTTPSessionManager:
         event_store: EventStore | None = None,
         json_response: bool = False,
         stateless: bool = False,
-    ):
+    ) -> None:
+        """
+        Initialize the StreamableHTTP session manager.
+
+        Args:
+            server: FastMCP server instance for handling MCP protocol operations
+            event_store: Optional event store for resumability (default: None)
+            json_response: Use JSON responses instead of SSE streams (default: False)
+            stateless: Create fresh transport per request (default: False)
+        """
         self.server = server
         self.event_store = event_store
         self.json_response = json_response
@@ -77,20 +127,16 @@ class StreamableHTTPSessionManager:
     @contextlib.asynccontextmanager
     async def run(self) -> AsyncIterator[None]:
         """
-        Run the session manager with proper lifecycle management.
+        Initialize session manager with task group for concurrent operations.
 
-        This creates and manages the task group for all session operations.
+        Creates task group infrastructure, manages active sessions, and ensures
+        proper cleanup on exit. Can only be called once per instance.
 
-        Important: This method can only be called once per instance. The same
-        StreamableHTTPSessionManager instance cannot be reused after this
-        context manager exits. Create a new instance if you need to restart.
+        Yields:
+            None: Control while manager is active
 
-        Use this in the lifespan context manager of your Starlette app:
-
-        @contextlib.asynccontextmanager
-        async def lifespan(app: Starlette) -> AsyncIterator[None]:
-            async with session_manager.run():
-                yield
+        Raises:
+            RuntimeError: If called multiple times on same instance
         """
         # Thread-safe check to ensure run() is only called once
         with self._run_lock:
@@ -120,14 +166,16 @@ class StreamableHTTPSessionManager:
         request: web.Request,
     ) -> web.StreamResponse:
         """
-        Process request with proper session handling and transport setup.
-
-        Dispatches to the appropriate handler based on stateless mode.
+        Route HTTP request to appropriate handler based on operation mode.
 
         Args:
-            scope: ASGI scope
-            receive: ASGI receive function
-            send: ASGI send function
+            request: HTTP request to process
+
+        Returns:
+            HTTP response (StreamResponse for SSE or Response for JSON)
+
+        Raises:
+            RuntimeError: If task group not initialized (run() not called)
         """
         if self._task_group is None:
             raise RuntimeError("Task group is not initialized. Make sure to use run().")
@@ -143,12 +191,22 @@ class StreamableHTTPSessionManager:
         request: web.Request,
     ) -> web.StreamResponse:
         """
-        Process request in stateless mode - creating a new transport for each request.
+        Handle request in stateless mode by creating fresh transport instance.
+
+        In stateless mode, each request gets a completely fresh transport with no
+        session tracking or state persistence. This is ideal for load-balanced
+        deployments where requests can be handled by any server instance with:
+        - No session ID tracking or validation
+        - Fresh MCP server instance per request
+        - No event store or resumability support
+        - Lower memory overhead for high-throughput scenarios
+        - Suitable for horizontally scaled deployments
 
         Args:
-            scope: ASGI scope
-            receive: ASGI receive function
-            send: ASGI send function
+            request: HTTP request to process with fresh transport
+
+        Returns:
+            HTTP response from the newly created transport instance
         """
         logger.debug("Stateless mode: Creating new transport for this request")
         # No session ID needed in stateless mode
@@ -183,12 +241,32 @@ class StreamableHTTPSessionManager:
         request: web.Request,
     ) -> web.StreamResponse:
         """
-        Process request in stateful mode - maintaining session state between requests.
+        Handle request in stateful mode with session persistence and tracking.
+
+        In stateful mode, sessions persist between requests using session IDs.
+        This enables advanced features like resumability, event replay, and
+        long-lived client connections with maintained state.
+
+        Session handling logic:
+        1. **Existing Session**: If session ID exists, route to existing transport
+        2. **New Session**: If no session ID, create new session with unique ID
+        3. **Invalid Session**: If session ID provided but not found, return error
+
+        This mode provides:
+        - Session ID generation and tracking
+        - Session-based transport routing
+        - Event store integration for resumability
+        - Persistent MCP server state between requests
+        - Support for long-lived client connections
 
         Args:
-            scope: ASGI scope
-            receive: ASGI receive function
-            send: ASGI send function
+            request: HTTP request to process with session management
+
+        Returns:
+            HTTP response from the appropriate session transport
+
+        Raises:
+            RuntimeError: If task group not available for starting new sessions
         """
         request_mcp_session_id = request.headers.get(MCP_SESSION_ID_HEADER)
 

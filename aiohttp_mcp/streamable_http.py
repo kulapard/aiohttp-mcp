@@ -1,10 +1,22 @@
 """
 StreamableHTTP Server Transport Module
 
-This module implements an HTTP transport layer with Streamable HTTP.
+This module implements the StreamableHTTP transport layer for MCP servers.
+It provides FastMCP-compatible session management with support for both
+stateful and stateless operation modes.
 
-The transport handles bidirectional communication using HTTP requests and
-responses, with streaming support for long-running operations.
+The transport handles bidirectional JSON-RPC communication using:
+- HTTP POST requests for client-to-server messages
+- Server-Sent Events (SSE) streams for server-to-client messages
+- Session management with optional resumability via event stores
+- Support for both streaming responses and direct JSON responses
+
+Features:
+- Session ID-based request routing and validation
+- Protocol version negotiation and validation
+- Event replay for resumable connections
+- Memory stream management for concurrent request handling
+- Comprehensive error handling with proper HTTP status codes
 """
 
 import json
@@ -64,10 +76,41 @@ SESSION_ID_PATTERN = re.compile(r"^[\x21-\x7E]+$")
 
 class StreamableHTTPServerTransport:
     """
-    HTTP server transport with event streaming support for MCP.
+    FastMCP-compatible HTTP server transport with advanced session management.
 
-    Handles JSON-RPC messages in HTTP POST requests with SSE streaming.
-    Supports optional JSON responses and session management.
+    This transport provides a complete HTTP-based communication layer for MCP servers,
+    supporting both stateful and stateless operation modes. It implements the
+    StreamableHTTP protocol specification with comprehensive session management,
+    event streaming, and resumability features.
+
+    Key Features:
+    - **Session Management**: Optional session ID-based request routing
+    - **Dual Response Modes**: SSE streaming or direct JSON responses
+    - **Resumability**: Event replay via configurable event stores
+    - **Protocol Compliance**: Full MCP protocol version negotiation
+    - **Concurrent Handling**: Memory streams for multiple simultaneous requests
+    - **Error Resilience**: Comprehensive error handling and recovery
+
+    Transport Modes:
+    - **Streaming Mode** (default): Uses SSE for real-time server-to-client communication
+    - **JSON Mode**: Returns direct JSON responses for request-response patterns
+
+    Supported HTTP Methods:
+    - **GET**: Establishes SSE streams for server-initiated messages
+    - **POST**: Handles client JSON-RPC messages with streaming or JSON responses
+    - **DELETE**: Terminates sessions explicitly (when session management enabled)
+
+    Session Management:
+    - Sessions are identified by the 'mcp-session-id' header
+    - Session IDs must contain only visible ASCII characters (0x21-0x7E)
+    - Sessions maintain state between requests for resumable connections
+    - Optional session termination via DELETE requests
+
+    Resumability:
+    - When an event store is configured, events are persisted
+    - Clients can reconnect using 'Last-Event-ID' header to replay missed events
+    - Event IDs are generated and tracked automatically
+    - Seamless reconnection and message continuity
     """
 
     # Server notification streams for POST requests as well as standalone SSE stream
@@ -119,7 +162,18 @@ class StreamableHTTPServerTransport:
         error_code: int = INVALID_REQUEST,
         headers: dict[str, str] | None = None,
     ) -> web.Response:
-        """Create an error response with a simple string message."""
+        """
+        Create a properly formatted JSON-RPC error response.
+
+        Args:
+            error_message: Human-readable error description
+            status_code: HTTP status code for the response
+            error_code: JSON-RPC error code (default: INVALID_REQUEST)
+            headers: Additional HTTP headers to include
+
+        Returns:
+            web.Response with JSON-RPC error format and appropriate headers
+        """
         response_headers = {"Content-Type": CONTENT_TYPE_JSON}
         if headers:
             response_headers.update(headers)
@@ -149,7 +203,17 @@ class StreamableHTTPServerTransport:
         status_code: HTTPStatus = HTTPStatus.OK,
         headers: dict[str, str] | None = None,
     ) -> web.Response:
-        """Create a JSON response from a JSONRPCMessage"""
+        """
+        Create an HTTP response with JSON-RPC message content.
+
+        Args:
+            response_message: JSON-RPC message to serialize, or None for empty response
+            status_code: HTTP status code (default: 200 OK)
+            headers: Additional HTTP headers to include
+
+        Returns:
+            web.Response with serialized JSON-RPC content and session headers
+        """
         response_headers = {"Content-Type": CONTENT_TYPE_JSON}
         if headers:
             response_headers.update(headers)
@@ -164,11 +228,27 @@ class StreamableHTTPServerTransport:
         )
 
     def _get_session_id(self, request: web.Request) -> str | None:
-        """Extract the session ID from request headers."""
+        """
+        Extract the MCP session ID from request headers.
+
+        Args:
+            request: HTTP request object
+
+        Returns:
+            Session ID string if present, None otherwise
+        """
         return request.headers.get(MCP_SESSION_ID_HEADER)
 
     def _create_event_data(self, event_message: EventMessage) -> Event:
-        """Create an SSE event from an EventMessage."""
+        """
+        Convert an EventMessage to SSE Event format.
+
+        Args:
+            event_message: Message with optional event ID for SSE transmission
+
+        Returns:
+            Event object suitable for Server-Sent Events streaming
+        """
         data = event_message.message.model_dump_json(by_alias=True, exclude_none=True)
 
         if event_message.event_id:
@@ -179,7 +259,12 @@ class StreamableHTTPServerTransport:
             return Event(data=data, event_type=EventType.MESSAGE)
 
     async def _clean_up_memory_streams(self, request_id: RequestId) -> None:
-        """Clean up memory streams for a given request ID."""
+        """
+        Safely close and remove memory streams for a specific request.
+
+        Args:
+            request_id: Identifier of the request whose streams should be cleaned up
+        """
         if request_id in self._request_streams:
             try:
                 # Close the request stream
@@ -192,7 +277,24 @@ class StreamableHTTPServerTransport:
                 self._request_streams.pop(request_id, None)
 
     async def handle_request(self, request: web.Request) -> web.StreamResponse:
-        """Application entry point that handles all HTTP requests"""
+        """
+        Main entry point for processing HTTP requests to the transport.
+
+        Routes requests to appropriate handlers based on HTTP method:
+        - GET: Establish SSE streams or replay events
+        - POST: Process JSON-RPC messages
+        - DELETE: Terminate sessions
+        - Others: Return Method Not Allowed
+
+        Args:
+            request: HTTP request to process
+
+        Returns:
+            HTTP response (streaming or JSON depending on configuration)
+
+        Raises:
+            ValueError: If transport is not properly initialized
+        """
         if self._terminated:
             # If the session has been terminated, return 404 Not Found
             return self._create_error_response(
@@ -210,7 +312,15 @@ class StreamableHTTPServerTransport:
             return await self._handle_unsupported_request(request)
 
     def _check_accept_headers(self, request: web.Request) -> tuple[bool, bool]:
-        """Check if the request accepts the required media types."""
+        """
+        Validate Accept headers for required content types.
+
+        Args:
+            request: HTTP request to check
+
+        Returns:
+            Tuple of (accepts_json, accepts_sse) indicating support for each content type
+        """
         accept_header = request.headers.get("accept", "")
         accept_types = [media_type.strip() for media_type in accept_header.split(",")]
 
@@ -220,14 +330,40 @@ class StreamableHTTPServerTransport:
         return has_json, has_sse
 
     def _check_content_type(self, request: web.Request) -> bool:
-        """Check if the request has the correct Content-Type."""
+        """
+        Validate that request Content-Type is application/json.
+
+        Args:
+            request: HTTP request to validate
+
+        Returns:
+            True if Content-Type is acceptable, False otherwise
+        """
         content_type = request.headers.get("content-type", "")
         content_type_parts = [part.strip() for part in content_type.split(";")[0].split(",")]
 
         return any(part == CONTENT_TYPE_JSON for part in content_type_parts)
 
     async def _handle_post_request(self, request: web.Request) -> web.StreamResponse:  # noqa: C901
-        """Handle POST requests containing JSON-RPC messages."""
+        """
+        Process HTTP POST requests containing JSON-RPC messages.
+
+        This method handles the core message processing workflow:
+        1. Validates Accept and Content-Type headers
+        2. Parses and validates JSON-RPC message format
+        3. Performs session and protocol version validation
+        4. Routes messages based on type (request, notification, response)
+        5. Returns appropriate response (SSE stream or JSON)
+
+        For JSON-RPC requests, creates dedicated streams for responses.
+        For notifications, returns immediate 202 Accepted status.
+
+        Args:
+            request: HTTP POST request with JSON-RPC message body
+
+        Returns:
+            StreamResponse (SSE) or Response (JSON) based on configuration
+        """
         writer = self._read_stream_writer
         if writer is None:
             raise ValueError("No read stream writer available. Ensure connect() is called first.")
@@ -432,11 +568,24 @@ class StreamableHTTPServerTransport:
 
     async def _handle_get_request(self, request: web.Request) -> web.StreamResponse:  # noqa: C901
         """
-        Handle GET request to establish SSE.
+        Establish Server-Sent Events stream for server-initiated communication.
 
-        This allows the server to communicate to the client without the client
-        first sending data via HTTP POST. The server can send JSON-RPC requests
-        and notifications on this stream.
+        GET requests create persistent SSE connections that allow the server to:
+        - Send JSON-RPC requests to the client
+        - Send notifications to the client
+        - Maintain long-lived bidirectional communication
+
+        Supports resumability via Last-Event-ID header for reconnection scenarios.
+        Only one SSE stream is allowed per session to prevent conflicts.
+
+        Args:
+            request: HTTP GET request for SSE establishment
+
+        Returns:
+            StreamResponse with Server-Sent Events stream
+
+        Raises:
+            ValueError: If transport streams are not initialized
         """
         writer = self._read_stream_writer
         if writer is None:
@@ -533,7 +682,19 @@ class StreamableHTTPServerTransport:
             raise
 
     async def _handle_delete_request(self, request: web.Request) -> web.StreamResponse:
-        """Handle DELETE requests for explicit session termination."""
+        """
+        Process DELETE requests for explicit session termination.
+
+        Terminates the current session, closes all streams, and prevents
+        further requests with the same session ID (returns 404 Not Found).
+        Only available when session management is enabled.
+
+        Args:
+            request: HTTP DELETE request for session termination
+
+        Returns:
+            JSON response confirming termination or error response
+        """
         # Validate session ID
         if not self.mcp_session_id:
             # If no session ID set, return Method Not Allowed
@@ -553,9 +714,17 @@ class StreamableHTTPServerTransport:
         )
 
     async def _terminate_session(self) -> None:
-        """Terminate the current session, closing all streams.
+        """
+        Terminate the current session and clean up all resources.
 
-        Once terminated, all requests with this session ID will receive 404 Not Found.
+        This method:
+        1. Marks the session as terminated
+        2. Closes all active request streams
+        3. Closes transport read/write streams
+        4. Clears internal stream mappings
+
+        After termination, all subsequent requests will receive 404 Not Found.
+        This is irreversible - a new transport instance is needed for new sessions.
         """
 
         self._terminated = True
@@ -586,7 +755,18 @@ class StreamableHTTPServerTransport:
             logger.debug("Error closing streams: %s", e)
 
     async def _handle_unsupported_request(self, request: web.Request) -> web.StreamResponse:
-        """Handle unsupported HTTP methods."""
+        """
+        Handle HTTP methods not supported by the transport.
+
+        Returns 405 Method Not Allowed with proper Allow header indicating
+        supported methods (GET, POST, DELETE).
+
+        Args:
+            request: HTTP request with unsupported method
+
+        Returns:
+            Error response with Method Not Allowed status
+        """
         headers = {
             "Content-Type": CONTENT_TYPE_JSON,
             "Allow": "GET, POST, DELETE",
@@ -601,6 +781,15 @@ class StreamableHTTPServerTransport:
         )
 
     async def _validate_request_headers(self, request: web.Request) -> web.Response | None:
+        """
+        Validate required request headers (session ID and protocol version).
+
+        Args:
+            request: HTTP request to validate
+
+        Returns:
+            Error response if validation fails, None if validation passes
+        """
         if error_response := await self._validate_session(request):
             return error_response
         if error_response := await self._validate_protocol_version(request):
@@ -608,7 +797,20 @@ class StreamableHTTPServerTransport:
         return None
 
     async def _validate_session(self, request: web.Request) -> web.Response | None:
-        """Validate the session ID in the request."""
+        """
+        Validate session identifier in request headers.
+
+        Checks that:
+        - Session ID is provided when required
+        - Session ID matches the transport's expected session
+        - Session ID format is valid
+
+        Args:
+            request: HTTP request to validate
+
+        Returns:
+            Error response if session validation fails, None if valid
+        """
         if not self.mcp_session_id:
             # If we're not using session IDs, return None
             return None
@@ -633,7 +835,18 @@ class StreamableHTTPServerTransport:
         return None
 
     async def _validate_protocol_version(self, request: web.Request) -> web.Response | None:
-        """Validate the protocol version header in the request."""
+        """
+        Validate MCP protocol version compatibility.
+
+        Checks the mcp-protocol-version header against supported versions.
+        Uses default version if header is not provided.
+
+        Args:
+            request: HTTP request to validate
+
+        Returns:
+            Error response if version is unsupported, None if compatible
+        """
         # Get the protocol version from the request headers
         protocol_version = request.headers.get(MCP_PROTOCOL_VERSION_HEADER)
 
@@ -655,8 +868,22 @@ class StreamableHTTPServerTransport:
 
     async def _replay_events(self, last_event_id: str, request: web.Request) -> web.StreamResponse:  # noqa: C901
         """
-        Replays events that would have been sent after the specified event ID.
-        Only used when resumability is enabled.
+        Replay missed events for resumable connections.
+
+        When clients reconnect with Last-Event-ID header, this method:
+        1. Queries the event store for events after the specified ID
+        2. Replays historical events via SSE
+        3. Continues with new events as they arrive
+
+        This enables seamless reconnection and message continuity.
+        Only available when event store is configured.
+
+        Args:
+            last_event_id: ID of the last event the client received
+            request: HTTP request for event replay
+
+        Returns:
+            SSE StreamResponse with replayed and new events
         """
         event_store = self._event_store
         if not event_store:
