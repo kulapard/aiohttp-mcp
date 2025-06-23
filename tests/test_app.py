@@ -65,7 +65,7 @@ def subapp(mcp: AiohttpMCP) -> web.Application:
 
 @pytest.fixture
 def custom_app(mcp: AiohttpMCP) -> web.Application:
-    app_builder = AppBuilder(mcp, path=TEST_PATH)
+    app_builder = AppBuilder(mcp=mcp, path=TEST_PATH)
 
     async def custom_sse_handler(request: web.Request) -> web.StreamResponse:
         """Custom SSE handler."""

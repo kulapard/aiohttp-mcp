@@ -91,9 +91,20 @@ help:
 	@echo "  make lint       - Run linting"
 	@echo "  make format     - Format code"
 	@echo "  make release    - Create a new release (clean, build, publish)"
+	@echo ""
+	@echo "Example runners:"
+	@echo "  make run-server              - Run basic MCP server"
+	@echo "  make run-server-custom       - Run custom MCP server"
+	@echo "  make run-server-subapp       - Run MCP sub-application server"
+	@echo "  make run-server-streamable   - Run Streamable HTTP MCP server"
+	@echo "  make run-client              - Run MCP client"
+	@echo "  make run-inspector           - Run MCP inspector"
 
 run-inspector:
 	npx @modelcontextprotocol/inspector
+
+run-client:
+	uv run examples/client.py
 
 run-server:
 	uv run examples/server.py
@@ -104,5 +115,5 @@ run-server-custom:
 run-server-subapp:
 	uv run examples/server_subapp.py
 
-run-client:
-	uv run examples/client.py
+run-server-streamable:
+	uv run examples/server_streamable_http.py
