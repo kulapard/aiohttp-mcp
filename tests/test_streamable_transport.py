@@ -38,6 +38,7 @@ from aiohttp_mcp.streamable_http import (
     StreamableHTTPServerTransport,
 )
 from aiohttp_mcp.streamable_http_manager import StreamableHTTPSessionManager
+from aiohttp_mcp.transport import EventType
 
 from .utils import register_mcp_resources
 
@@ -371,6 +372,148 @@ class TestStreamableHTTPServerTransport:
             response = await transport_stateful.handle_request(request)
             assert response.status == HTTPStatus.OK
             assert transport_stateful._terminated is True
+
+    # JSON Response Mode Tests
+    async def test_json_mode_post_request_with_response(
+        self, transport_json_mode: StreamableHTTPServerTransport
+    ) -> None:
+        """Test POST request in JSON mode that expects a response."""
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+                MCP_SESSION_ID_HEADER: "json-session-456",  # Match the transport's session ID
+            },
+            body_text='{"jsonrpc": "2.0", "method": "echo_tool", "id": "test-1", "params": {"message": "hello"}}',
+        )
+
+        async with transport_json_mode.connect() as (read_stream, write_stream):
+            import anyio
+
+            # Use a task group to run both the mock server and request handling concurrently
+            async def mock_server() -> None:
+                # Wait for the request to arrive
+                session_msg = await read_stream.receive()
+                assert isinstance(session_msg, SessionMessage)
+
+                # Send back a response with matching ID
+                response_msg = JSONRPCMessage(
+                    root=JSONRPCResponse(
+                        jsonrpc="2.0",
+                        id="test-1",  # This ID must match the request ID
+                        result={"message": "Echo: hello"},
+                    )
+                )
+                await write_stream.send(SessionMessage(response_msg))
+
+            async with anyio.create_task_group() as tg:
+                # Start the mock server to handle incoming requests
+                tg.start_soon(mock_server)
+
+                # Process the request - this should complete when the response arrives
+                response = await transport_json_mode.handle_request(request)
+
+            assert response.status == HTTPStatus.OK
+            assert response.headers["Content-Type"] == CONTENT_TYPE_JSON
+
+    async def test_json_mode_post_notification(self, transport_json_mode: StreamableHTTPServerTransport) -> None:
+        """Test POST notification in JSON mode (should return 202 Accepted)."""
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+                MCP_SESSION_ID_HEADER: "json-session-456",  # Match the transport's session ID
+            },
+            body_text='{"jsonrpc": "2.0", "method": "test_notification", "params": {"data": "test"}}',
+        )
+
+        async with transport_json_mode.connect() as (read_stream, write_stream):
+            import anyio
+
+            # For notifications, we still need to consume the message from the read stream
+            async def consume_message() -> None:
+                session_msg = await read_stream.receive()
+                assert isinstance(session_msg, SessionMessage)
+
+            async with anyio.create_task_group() as tg:
+                # Start the message consumer
+                tg.start_soon(consume_message)
+
+                # Process the request
+                response = await transport_json_mode.handle_request(request)
+
+            assert response.status == HTTPStatus.ACCEPTED
+
+    # Helper Method Tests
+    def test_create_error_response_with_headers(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _create_error_response with custom headers."""
+        response = transport_stateless._create_error_response(
+            "Test error", HTTPStatus.BAD_REQUEST, headers={"X-Custom": "test"}
+        )
+        assert response.status == HTTPStatus.BAD_REQUEST
+        assert response.headers["X-Custom"] == "test"
+        assert response.headers["Content-Type"] == CONTENT_TYPE_JSON
+
+    def test_create_json_response_with_message(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _create_json_response with actual message."""
+        message = JSONRPCMessage(root=JSONRPCResponse(jsonrpc="2.0", id="test", result={"data": "test"}))
+        response = transport_stateless._create_json_response(message)
+        assert response.status == HTTPStatus.OK
+        assert response.headers["Content-Type"] == CONTENT_TYPE_JSON
+
+    def test_create_event_data_with_event_id(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _create_event_data with event ID."""
+        message = JSONRPCMessage(root=JSONRPCNotification(jsonrpc="2.0", method="test", params={}))
+        event_message = EventMessage(message, "event-123")
+
+        event = transport_stateless._create_event_data(event_message)
+        assert event.event_type == EventType.MESSAGE
+        assert event.event_id == "event-123"
+
+    def test_create_event_data_without_event_id(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _create_event_data without event ID."""
+        message = JSONRPCMessage(root=JSONRPCNotification(jsonrpc="2.0", method="test", params={}))
+        event_message = EventMessage(message, None)
+
+        event = transport_stateless._create_event_data(event_message)
+        assert event.event_type == EventType.MESSAGE
+        assert event.event_id is None
+
+    def test_get_session_id_from_headers(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _get_session_id header extraction."""
+        request = create_mock_request(headers={MCP_SESSION_ID_HEADER: "test-session"})
+        session_id = transport_stateless._get_session_id(request)
+        assert session_id == "test-session"
+
+    def test_check_accept_headers_both_types(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _check_accept_headers with both JSON and SSE."""
+        request = create_mock_request(headers={"accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}"})
+        has_json, has_sse = transport_stateless._check_accept_headers(request)
+        assert has_json is True
+        assert has_sse is True
+
+    def test_check_content_type_valid(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _check_content_type with valid JSON content type."""
+        request = create_mock_request(headers={"content-type": CONTENT_TYPE_JSON})
+        is_valid = transport_stateless._check_content_type(request)
+        assert is_valid is True
+
+    async def test_clean_up_memory_streams(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test _clean_up_memory_streams cleanup."""
+        # Add a mock stream to clean up
+        mock_writer = AsyncMock()
+        mock_reader = AsyncMock()
+        transport_stateless._request_streams["test-request"] = (mock_writer, mock_reader)
+
+        await transport_stateless._clean_up_memory_streams("test-request")
+
+        # Stream should be removed from mapping
+        assert "test-request" not in transport_stateless._request_streams
+        # Close methods should have been called
+        mock_writer.aclose.assert_called_once()
+        mock_reader.aclose.assert_called_once()
 
 
 class TestStreamableHTTPSessionManager:
