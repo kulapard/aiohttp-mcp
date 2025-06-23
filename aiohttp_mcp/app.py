@@ -144,12 +144,22 @@ def setup_mcp_subapp(
     mcp_registry: AiohttpMCP,
     prefix: str = "/mcp",
     package_names: list[str] | None = None,
+    transport_mode: TransportMode = TransportMode.SSE,
+    json_response: bool = False,
+    stateless: bool = False,
 ) -> None:
     """Set up the MCP server sub-application with the given prefix."""
     # Go through the discovery process to find all decorated functions
     discover_modules(package_names)
 
-    mcp_app = build_mcp_app(mcp_registry, prefix, is_subapp=True)
+    mcp_app = build_mcp_app(
+        mcp_registry,
+        prefix,
+        is_subapp=True,
+        transport_mode=transport_mode,
+        json_response=json_response,
+        stateless=stateless,
+    )
     app.add_subapp(prefix, mcp_app)
 
     # Store the main app in the MCP registry for access from tools
