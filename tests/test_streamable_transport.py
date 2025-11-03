@@ -241,7 +241,7 @@ async def create_test_app(
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(echo_handler)
                     result = await transport_or_manager.handle_request(request)
-                    return result  # type: ignore[no-any-return]
+                return result  # type: ignore[no-any-return]
 
         app.router.add_route("*", TEST_PATH, handler)
 
@@ -429,7 +429,7 @@ class TestStreamableHTTPServerTransport:
             body_text='{"jsonrpc": "2.0", "method": "test_notification", "params": {"data": "test"}}',
         )
 
-        async with transport_json_mode.connect() as (read_stream, write_stream):
+        async with transport_json_mode.connect() as (read_stream, _write_stream):
             import anyio
 
             # For notifications, we still need to consume the message from the read stream
@@ -769,7 +769,7 @@ class TestErrorHandling:
 
     async def test_connection_cleanup_on_error(self, transport_stateless: StreamableHTTPServerTransport) -> None:
         """Test proper cleanup when connection encounters errors."""
-        async with transport_stateless.connect() as (read_stream, write_stream):
+        async with transport_stateless.connect() as (_read_stream, write_stream):
             # Simulate an error condition by closing the write stream
             await write_stream.aclose()
 
