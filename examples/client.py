@@ -80,7 +80,7 @@ class MCPClient:
                 tool_args = content.input
 
                 # Execute tool call
-                call_tool_result = await self.session.call_tool(tool_name, tool_args)  # type: ignore
+                call_tool_result = await self.session.call_tool(tool_name, tool_args)
                 final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
 
                 assistant_message_content.append(content)

@@ -241,7 +241,7 @@ async def create_test_app(
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(echo_handler)
                     result = await transport_or_manager.handle_request(request)
-                    return result  # type: ignore[no-any-return]
+                return result  # type: ignore[no-any-return]
 
         app.router.add_route("*", TEST_PATH, handler)
 
