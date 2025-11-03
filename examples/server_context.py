@@ -165,7 +165,10 @@ def get_user_id(
 # Tools that use BOTH lifespan context (DB, API client) AND request context (user identity)
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Query Database",
+    description="Execute a SQL query with user identity tracking and logging",
+)
 async def query_database(
     sql: str,
     ctx: Context,  # type: ignore[type-arg]
@@ -196,7 +199,10 @@ async def query_database(
         return f"Error: {e}"
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Check Permissions",
+    description="Check if the current user has permission to perform a specific action",
+)
 async def check_permissions(
     action: str,
     ctx: Context,  # type: ignore[type-arg]
@@ -227,7 +233,10 @@ async def check_permissions(
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Call External Service",
+    description="Call an external API using the shared HTTP client with user identity",
+)
 async def call_external_service(
     endpoint: str,
     ctx: Context,  # type: ignore[type-arg]
@@ -253,7 +262,10 @@ async def call_external_service(
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Get Configuration",
+    description="Get application configuration from the lifespan context",
+)
 def get_config(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:
@@ -268,7 +280,10 @@ def get_config(
     }
 
 
-@mcp.tool()
+@mcp.tool(
+    title="Get Context Info",
+    description="Show all available lifespan and request context information for debugging",
+)
 def get_context_info(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:

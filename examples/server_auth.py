@@ -20,7 +20,10 @@ from aiohttp_mcp import AiohttpMCP, Context, build_mcp_app
 simple_mcp = AiohttpMCP(name="Simple Auth Server", debug=True)
 
 
-@simple_mcp.tool()
+@simple_mcp.tool(
+    title="Get Time with Authentication",
+    description="Get the current time in a specific timezone, including authentication info from the request",
+)
 async def get_time_with_auth(
     timezone: str,
     ctx: Context,  # type: ignore[type-arg]
@@ -57,7 +60,10 @@ async def get_time_with_auth(
     return str(result)
 
 
-@simple_mcp.tool()
+@simple_mcp.tool(
+    title="Echo HTTP Headers",
+    description="Echo all HTTP headers, cookies, and request metadata for debugging",
+)
 async def echo_headers(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:
@@ -111,7 +117,10 @@ def validate_api_key(api_key: str) -> tuple[bool, str]:
     return True, "OK"
 
 
-@auth_mcp.tool()
+@auth_mcp.tool(
+    title="Secure Operation",
+    description="Perform a secure operation that requires Bearer token or API key authentication",
+)
 async def secure_operation(
     data: str,
     ctx: Context,  # type: ignore[type-arg]
@@ -158,7 +167,10 @@ async def secure_operation(
     return result
 
 
-@auth_mcp.tool()
+@auth_mcp.tool(
+    title="Get User Info",
+    description="Get information about the authenticated user from request headers",
+)
 def get_user_info(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:
