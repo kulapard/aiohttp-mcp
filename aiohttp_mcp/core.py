@@ -113,7 +113,11 @@ class AiohttpMCP:
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Sequence[Content]:
         """Call a tool by name with arguments."""
         result = await self._fastmcp.call_tool(name, arguments)
-        # FastMCP.call_tool can return dict[str, Any] for structured output, but we only support Sequence[Content]
+        # FastMCP.call_tool returns tuple (content, result_dict) for structured output support
+        if isinstance(result, tuple):
+            content_list: Sequence[Content] = result[0]
+            return content_list
+        # For backwards compatibility with older FastMCP versions
         if isinstance(result, dict):
             raise TypeError(f"Unexpected dict return from call_tool: {result}")
         return result
