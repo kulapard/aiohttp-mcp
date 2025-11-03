@@ -201,8 +201,8 @@ class TestRequestContextAccess:
         # The key test is that headers are passed through to the handler
         assert resp.status in (200, 202, 404, 406)  # Various valid responses
 
-        # The session would have access to these headers if properly initialized
-        # Tools called would have access to request context
+        # Verification: HTTP layer accepts the connection with custom headers.
+        # Tool-level access to these headers is verified in TestRequestContextDataVerification.
 
     async def test_access_custom_headers(self, client_sse: TestClient[web.Request, web.Application]) -> None:
         """Test accessing custom headers in tools."""
@@ -214,8 +214,8 @@ class TestRequestContextAccess:
 
         async with client_sse.get("/mcp", headers=headers) as resp:
             assert resp.status == 200
-            # Headers are passed to the transport
-            # Tools can access them via ctx.request_context.request.headers
+            # Verification: SSE connection established with custom headers.
+            # Tool-level header access verified in TestRequestContextDataVerification
 
     async def test_access_cookies(self, client_sse: TestClient[web.Request, web.Application]) -> None:
         """Test accessing cookies in tools."""
@@ -223,13 +223,15 @@ class TestRequestContextAccess:
 
         async with client_sse.get("/mcp", cookies=cookies) as resp:
             assert resp.status == 200
-            # Cookies are available via ctx.request_context.request.cookies
+            # Verification: SSE connection established with cookies.
+            # Tool-level cookie access verified in TestRequestContextDataVerification
 
     async def test_no_auth_headers(self, client_sse: TestClient[web.Request, web.Application]) -> None:
         """Test tool behavior when no auth headers are provided."""
         async with client_sse.get("/mcp") as resp:
             assert resp.status == 200
-            # Tools should handle missing headers gracefully
+            # Verification: Connection established without auth headers.
+            # Tools should handle missing headers gracefully (verified in TestRequestContextDataVerification)
 
     async def test_multiple_custom_headers(self, client_sse: TestClient[web.Request, web.Application]) -> None:
         """Test accessing multiple custom headers."""
@@ -312,9 +314,8 @@ class TestRequestContextWithLifespan:
 
         async with client_combined.get("/mcp", headers=headers) as resp:
             assert resp.status == 200
-            # Tool has access to both:
-            # - Lifespan context: db_name, api_key
-            # - Request context: user_id, auth header
+            # Verification: Connection established with both lifespan and request context.
+            # Tool access to both contexts verified via test_combined_context_direct_call() above
 
 
 class TestAuthenticationPatterns:
@@ -443,13 +444,15 @@ class TestEdgeCases:
         headers = {"Authorization": ""}
         async with client_edge.get("/mcp", headers=headers) as resp:
             assert resp.status == 200
+            # Verification: Connection accepts empty auth header without error
 
     async def test_malformed_auth_header(self, client_edge: TestClient[web.Request, web.Application]) -> None:
         """Test with malformed Authorization header."""
         headers = {"Authorization": "NotBearer token123"}
         async with client_edge.get("/mcp", headers=headers) as resp:
             assert resp.status == 200
-            # Tools should handle malformed headers gracefully
+            # Verification: Connection accepts malformed auth header.
+            # Tools should handle it gracefully (verified in TestAuthenticationPatterns)
 
 
 class TestRequestContextDataVerification:
