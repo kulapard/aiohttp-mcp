@@ -77,8 +77,6 @@ only-packages = true
 
 [tool.mypy]
 strict = true
-install_types = true
-non_interactive = true
 
 [tool.ruff]
 line-length = 120
