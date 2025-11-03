@@ -7,10 +7,10 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from mcp import ClientSession
 from mcp.client.sse import sse_client
-from mcp.types import TextContent, TextResourceContents
 from pydantic import AnyUrl
 
 from aiohttp_mcp import AiohttpMCP, AppBuilder, build_mcp_app, setup_mcp_subapp
+from aiohttp_mcp.types import TextContent, TextResourceContents
 
 from .utils import register_mcp_resources
 

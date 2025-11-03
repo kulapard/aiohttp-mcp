@@ -74,10 +74,14 @@ class AiohttpMCP:
         self._app = app
 
     def tool(
-        self, name: str | None = None, description: str | None = None, annotations: ToolAnnotations | None = None
+        self,
+        name: str | None = None,
+        title: str | None = None,
+        description: str | None = None,
+        annotations: ToolAnnotations | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a tool."""
-        return self._fastmcp.tool(name, title=description, annotations=annotations)
+        return self._fastmcp.tool(name, title=title, description=description, annotations=annotations)
 
     def resource(
         self,

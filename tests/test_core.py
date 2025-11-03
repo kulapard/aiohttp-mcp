@@ -1,8 +1,7 @@
 import pytest
-from mcp.types import TextContent
 
 from aiohttp_mcp import AiohttpMCP
-from aiohttp_mcp.types import Tool
+from aiohttp_mcp.types import TextContent, Tool
 
 from .utils import register_mcp_resources
 
@@ -20,6 +19,23 @@ async def test_list_tools(mcp: AiohttpMCP) -> None:
     assert tool.name == "echo_tool"
     assert tool.description == "Echo a message as a tool"
     assert "message" in tool.inputSchema["properties"]
+
+
+async def test_tool_with_title() -> None:
+    """Test that tool decorator supports title parameter."""
+    mcp = AiohttpMCP()
+
+    @mcp.tool(name="titled_tool", title="My Tool Title", description="My tool description")
+    def my_tool(arg: str) -> str:
+        """Tool docstring"""
+        return f"Result: {arg}"
+
+    tools = await mcp.list_tools()
+    assert len(tools) == 1
+    tool = tools[0]
+    assert tool.name == "titled_tool"
+    assert tool.title == "My Tool Title"
+    assert tool.description == "My tool description"
 
 
 async def test_call_tool(mcp: AiohttpMCP) -> None:
