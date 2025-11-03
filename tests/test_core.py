@@ -1,8 +1,7 @@
 import pytest
-from mcp.types import TextContent
 
 from aiohttp_mcp import AiohttpMCP
-from aiohttp_mcp.types import Tool
+from aiohttp_mcp.types import TextContent, Tool
 
 from .utils import register_mcp_resources
 

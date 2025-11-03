@@ -1,4 +1,3 @@
-# ruff: noqa: T201
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
