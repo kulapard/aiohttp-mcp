@@ -77,7 +77,7 @@ class AiohttpMCP:
         self, name: str | None = None, description: str | None = None, annotations: ToolAnnotations | None = None
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a tool."""
-        return self._fastmcp.tool(name, description, annotations)
+        return self._fastmcp.tool(name, title=description, annotations=annotations)
 
     def resource(
         self,
@@ -112,7 +112,15 @@ class AiohttpMCP:
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Sequence[Content]:
         """Call a tool by name with arguments."""
-        return await self._fastmcp.call_tool(name, arguments)
+        result = await self._fastmcp.call_tool(name, arguments)
+        # FastMCP.call_tool returns tuple (content, result_dict) for structured output support
+        if isinstance(result, tuple):
+            content_list: Sequence[Content] = result[0]
+            return content_list
+        # For backwards compatibility with older FastMCP versions
+        if isinstance(result, dict):
+            raise TypeError(f"Unexpected dict return from call_tool: {result}")
+        return result
 
     async def read_resource(self, uri: AnyUrl | str) -> Iterable[ReadResourceContents]:
         """Read a resource by URI."""

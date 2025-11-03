@@ -109,7 +109,7 @@ class TestMessageConverter:
         assert isinstance(msg, JSONRPCMessage)
         request = msg.root
         assert isinstance(request, JSONRPCRequest)
-        assert request.id == 1  # Access id through the root object
+        assert request.id == "1"  # ID is kept as string from JSON
         assert request.method == "test"
         assert request.jsonrpc == "2.0"
 
