@@ -4,6 +4,9 @@ on:
   push:
     branches: [ 'master' ]
   pull_request:
+  schedule:
+    # Run every Monday at 9:00 AM UTC
+    - cron: '0 9 * * 1'
 
 # one running workflow per branch, others will wait
 concurrency: ${{ github.ref }}
