@@ -19,7 +19,7 @@ dependencies = [
     "aiohttp>=3.9.0,<4.0.0",
     "aiohttp-sse>=2.2.0,<3.0.0",
     "anyio>=4.9.0,<5.0.0",
-    "mcp>=1.8.0,<2.0.0",
+    "mcp>=1.11.0,<2.0.0",
 ]
 keywords = [
     "mcp",
@@ -62,11 +62,10 @@ include = [
 
 [dependency-groups]
 dev = [
-    "mypy>=1.15.0,<2.0.0",
-    "python-dotenv>=1.1.0,<2.0.0",
-    "anthropic>=0.49.0,<1.0.0",
-    "httpx>=0.28.1,<1.0.0",
-    "mcp>=1.11.0,<2.0.0",
+    "mypy>=1.15.0",
+    "python-dotenv>=1.1.0",
+    "anthropic>=0.49.0",
+    "httpx>=0.28.1",
     "pip>=25.0.1",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
