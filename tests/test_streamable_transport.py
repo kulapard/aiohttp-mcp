@@ -82,10 +82,10 @@ class MockEventStore(EventStore):
     """Mock event store for testing resumability."""
 
     def __init__(self) -> None:
-        self.events: dict[str, list[tuple[str, JSONRPCMessage]]] = {}
+        self.events: dict[str, list[tuple[str, JSONRPCMessage | None]]] = {}
         self.event_counter = 0
 
-    async def store_event(self, stream_id: str, message: JSONRPCMessage) -> str:
+    async def store_event(self, stream_id: str, message: JSONRPCMessage | None) -> str:
         """Store an event and return its ID."""
         event_id = f"event-{self.event_counter}"
         self.event_counter += 1
@@ -116,7 +116,8 @@ class MockEventStore(EventStore):
         if target_stream and start_index < len(self.events[target_stream]):
             # Replay events after the last event ID
             for event_id, message in self.events[target_stream][start_index:]:
-                await callback(EventMessage(message, event_id))
+                if message is not None:
+                    await callback(EventMessage(message, event_id))
             return target_stream
 
         return None
