@@ -1,7 +1,8 @@
 import pytest
+from aiohttp import web
 
 from aiohttp_mcp import AiohttpMCP
-from aiohttp_mcp.types import TextContent, Tool
+from aiohttp_mcp.types import Annotations, Icon, TextContent, Tool
 
 from .utils import register_mcp_resources
 
@@ -133,8 +134,6 @@ async def test_app_property_error_before_setup() -> None:
 
 async def test_setup_app_twice_error() -> None:
     """Test that calling setup_app twice raises RuntimeError."""
-    from aiohttp import web
-
     mcp = AiohttpMCP()
     app1 = web.Application()
     app2 = web.Application()
@@ -194,8 +193,6 @@ async def test_remove_tool() -> None:
 
 async def test_tool_with_enhanced_parameters() -> None:
     """Test tool decorator with icons, meta, and structured_output parameters."""
-    from aiohttp_mcp.types import Icon
-
     mcp = AiohttpMCP()
 
     icon = Icon(src="https://example.com/icon.png")
@@ -221,8 +218,6 @@ async def test_tool_with_enhanced_parameters() -> None:
 
 async def test_resource_with_enhanced_parameters() -> None:
     """Test resource decorator with title, icons, and annotations parameters."""
-    from aiohttp_mcp.types import Annotations, Icon
-
     mcp = AiohttpMCP()
 
     icon = Icon(src="https://example.com/icon.png")
@@ -250,8 +245,6 @@ async def test_resource_with_enhanced_parameters() -> None:
 
 async def test_prompt_with_enhanced_parameters() -> None:
     """Test prompt decorator with title and icons parameters."""
-    from aiohttp_mcp.types import Icon
-
     mcp = AiohttpMCP()
 
     icon = Icon(src="https://example.com/icon.png")

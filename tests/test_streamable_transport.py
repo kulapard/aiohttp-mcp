@@ -10,6 +10,7 @@ This module provides comprehensive test coverage for:
 - Error handling and edge cases
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -17,8 +18,9 @@ from http import HTTPStatus
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import anyio
 import pytest
-from aiohttp import web
+from aiohttp import HttpVersion, web
 from mcp.server.lowlevel.server import Server
 from mcp.server.streamable_http import EventMessage, EventStore
 from mcp.shared.message import SessionMessage
@@ -64,8 +66,6 @@ def create_mock_request(
     request.query = query_params or {}
 
     # Add version attribute for aiohttp compatibility
-    from aiohttp import HttpVersion
-
     request.version = HttpVersion(1, 1)
 
     # Add transport and other required attributes
@@ -237,8 +237,6 @@ async def create_test_app(
                         if isinstance(msg, SessionMessage):
                             await write_stream.send(msg)
 
-                import anyio
-
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(echo_handler)
                     result = await transport_or_manager.handle_request(request)
@@ -390,8 +388,6 @@ class TestStreamableHTTPServerTransport:
         )
 
         async with transport_json_mode.connect() as (read_stream, write_stream):
-            import anyio
-
             # Use a task group to run both the mock server and request handling concurrently
             async def mock_server() -> None:
                 # Wait for the request to arrive
@@ -431,8 +427,6 @@ class TestStreamableHTTPServerTransport:
         )
 
         async with transport_json_mode.connect() as (read_stream, _write_stream):
-            import anyio
-
             # For notifications, we still need to consume the message from the read stream
             async def consume_message() -> None:
                 session_msg = await read_stream.receive()
@@ -792,7 +786,6 @@ class TestErrorHandling:
 
     async def test_concurrent_session_operations(self, session_manager_stateful: StreamableHTTPSessionManager) -> None:
         """Test concurrent operations on session manager."""
-        import asyncio
 
         async def make_request(request_id: str) -> web.StreamResponse:
             request = create_mock_request(

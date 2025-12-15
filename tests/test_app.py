@@ -9,7 +9,7 @@ from mcp import ClientSession
 from mcp.client.sse import sse_client
 from pydantic import AnyUrl
 
-from aiohttp_mcp import AiohttpMCP, AppBuilder, build_mcp_app, setup_mcp_subapp
+from aiohttp_mcp import AiohttpMCP, AppBuilder, TransportMode, build_mcp_app, setup_mcp_subapp
 from aiohttp_mcp.types import TextContent, TextResourceContents
 
 from .utils import register_mcp_resources
@@ -157,3 +157,55 @@ async def test_mcp_app(mcp: AiohttpMCP, request: pytest.FixtureRequest, app_fixt
             assert message.role == "user"
             assert message.content.type == "text"
             assert message.content.text == "Please process this message: test prompt"
+
+
+async def test_streamable_http_app_initialization() -> None:
+    """Test that streamable HTTP transport mode initializes correctly."""
+    mcp = AiohttpMCP()
+    app = build_mcp_app(mcp, path=TEST_PATH, transport_mode=TransportMode.STREAMABLE_HTTP)
+
+    assert isinstance(app, web.Application)
+    # Streamable HTTP uses a wildcard route handler
+    assert any(route.resource is not None and route.resource.canonical == TEST_PATH for route in app.router.routes())
+
+
+async def test_streamable_http_app_with_json_response() -> None:
+    """Test streamable HTTP transport with JSON response mode."""
+    mcp = AiohttpMCP()
+    app = build_mcp_app(
+        mcp,
+        path=TEST_PATH,
+        transport_mode=TransportMode.STREAMABLE_HTTP,
+        json_response=True,
+    )
+
+    assert isinstance(app, web.Application)
+
+
+async def test_streamable_http_app_stateless_mode() -> None:
+    """Test streamable HTTP transport in stateless mode."""
+    mcp = AiohttpMCP()
+    app = build_mcp_app(
+        mcp,
+        path=TEST_PATH,
+        transport_mode=TransportMode.STREAMABLE_HTTP,
+        stateless=True,
+    )
+
+    assert isinstance(app, web.Application)
+
+
+async def test_app_builder_path_property() -> None:
+    """Test AppBuilder path property."""
+    mcp = AiohttpMCP()
+    app_builder = AppBuilder(mcp=mcp, path="/custom/path")
+
+    assert app_builder.path == "/custom/path"
+
+
+async def test_transport_mode_enum() -> None:
+    """Test TransportMode enum values."""
+    assert TransportMode.SSE.value == "sse"
+    assert TransportMode.STREAMABLE_HTTP.value == "streamable_http"
+    assert str(TransportMode.SSE) == "sse"
+    assert str(TransportMode.STREAMABLE_HTTP) == "streamable_http"
