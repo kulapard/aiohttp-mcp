@@ -1,15 +1,69 @@
 """
-Tests for StreamableHTTP transport functionality.
+Integration Tests for StreamableHTTP Transport.
 
-This module provides comprehensive test coverage for:
-- StreamableHTTPServerTransport: Core transport implementation
-- StreamableHTTPSessionManager: Session management and orchestration
-- Integration with AppBuilder and MCP clients
-- Both stateful and stateless operation modes
-- Event replay and resumability features
-- Error handling and edge cases
+This module provides comprehensive integration tests for the StreamableHTTP transport
+layer using real MCP servers, session managers, and end-to-end scenarios.
+Unlike the unit tests (test_streamable_http_unit.py) which use mocked requests,
+these tests exercise the full stack with real components.
+
+The StreamableHTTP transport is an advanced transport mode that supports:
+- Both stateful (session-based) and stateless operation
+- GET/POST/DELETE endpoints for full session lifecycle
+- Event store integration for resumability and reconnection
+- JSON and SSE response modes
+- FastMCP-compatible session management patterns
+
+Test Coverage:
+- StreamableHTTPServerTransport: Integration with real MCP servers
+  - Full request/response lifecycle with message handling
+  - JSON response mode with request/response matching
+  - Session validation and routing
+  - Protocol version negotiation
+  - DELETE endpoint for session termination
+
+- StreamableHTTPSessionManager: Session orchestration and lifecycle
+  - Stateful mode: session creation, reuse, and routing
+  - Stateless mode: fresh transport per request
+  - Concurrent session operations
+  - Session cleanup on termination
+
+- AppBuilder Integration:
+  - Building apps with streamable transport mode
+  - Mixed transport modes (SSE + Streamable in one app)
+  - Sub-application setup
+
+- Event Store and Resumability:
+  - Event storage and replay after disconnection
+  - Last-Event-ID header handling
+  - Multiple event streams
+
+- Error Handling:
+  - Connection cleanup on errors
+  - Malformed message handling
+  - Concurrent operation safety
+  - Resource cleanup on termination
+
+Testing Approach:
+- Uses real MCP Server instances with registered tools
+- Creates actual aiohttp applications and request handlers
+- Tests end-to-end message flow from request to response
+- Uses anyio task groups for concurrent operation testing
+- Includes MockEventStore for resumability testing
+
+When to Add Tests Here:
+- Testing end-to-end scenarios with real MCP servers
+- Testing SessionManager behavior and session lifecycle
+- Testing AppBuilder integration and app configuration
+- Testing event store integration and resumability
+- Testing concurrent operations and race conditions
+- Testing resource cleanup and error recovery
+
+Related Test Files:
+- test_streamable_http_unit.py: Unit tests with mocked requests
+- test_sse_transport.py: Tests for SSE transport mode
 """
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -17,8 +71,9 @@ from http import HTTPStatus
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import anyio
 import pytest
-from aiohttp import web
+from aiohttp import HttpVersion, web
 from mcp.server.lowlevel.server import Server
 from mcp.server.streamable_http import EventMessage, EventStore
 from mcp.shared.message import SessionMessage
@@ -64,8 +119,6 @@ def create_mock_request(
     request.query = query_params or {}
 
     # Add version attribute for aiohttp compatibility
-    from aiohttp import HttpVersion
-
     request.version = HttpVersion(1, 1)
 
     # Add transport and other required attributes
@@ -237,8 +290,6 @@ async def create_test_app(
                         if isinstance(msg, SessionMessage):
                             await write_stream.send(msg)
 
-                import anyio
-
                 async with anyio.create_task_group() as tg:
                     tg.start_soon(echo_handler)
                     result = await transport_or_manager.handle_request(request)
@@ -390,8 +441,6 @@ class TestStreamableHTTPServerTransport:
         )
 
         async with transport_json_mode.connect() as (read_stream, write_stream):
-            import anyio
-
             # Use a task group to run both the mock server and request handling concurrently
             async def mock_server() -> None:
                 # Wait for the request to arrive
@@ -431,8 +480,6 @@ class TestStreamableHTTPServerTransport:
         )
 
         async with transport_json_mode.connect() as (read_stream, _write_stream):
-            import anyio
-
             # For notifications, we still need to consume the message from the read stream
             async def consume_message() -> None:
                 session_msg = await read_stream.receive()
@@ -792,7 +839,6 @@ class TestErrorHandling:
 
     async def test_concurrent_session_operations(self, session_manager_stateful: StreamableHTTPSessionManager) -> None:
         """Test concurrent operations on session manager."""
-        import asyncio
 
         async def make_request(request_id: str) -> web.StreamResponse:
             request = create_mock_request(

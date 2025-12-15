@@ -9,12 +9,13 @@ from urllib.parse import quote
 from uuid import UUID, uuid4
 
 import anyio
-import mcp.types as types
 from aiohttp import web
 from aiohttp_sse import EventSourceResponse, sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-from mcp.shared.message import ServerMessageMetadata, SessionMessage
 from pydantic import ValidationError
+
+from . import types
+from .types import ServerMessageMetadata, SessionMessage
 
 __all__ = [
     "Event",

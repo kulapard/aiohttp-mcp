@@ -30,24 +30,26 @@ import anyio
 from aiohttp import web
 from aiohttp_sse import sse_response
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
-from mcp.server.streamable_http import EventMessage, EventStore
-from mcp.shared.message import ServerMessageMetadata, SessionMessage
-from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
-from mcp.types import (
+from pydantic import ValidationError
+
+from aiohttp_mcp.transport import Event, EventType
+from aiohttp_mcp.types import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
     PARSE_ERROR,
+    SUPPORTED_PROTOCOL_VERSIONS,
     ErrorData,
+    EventMessage,
+    EventStore,
     JSONRPCError,
     JSONRPCMessage,
     JSONRPCRequest,
     JSONRPCResponse,
     RequestId,
+    ServerMessageMetadata,
+    SessionMessage,
 )
-from pydantic import ValidationError
-
-from aiohttp_mcp.transport import Event, EventType
 
 logger = logging.getLogger(__name__)
 

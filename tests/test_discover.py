@@ -1,3 +1,4 @@
+# ruff: noqa: PLC0415
 import sys
 from collections.abc import Generator
 from pathlib import Path

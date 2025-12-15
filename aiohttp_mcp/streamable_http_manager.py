@@ -56,13 +56,13 @@ from uuid import uuid4
 import anyio
 from aiohttp import web
 from anyio.abc import TaskStatus
-from mcp.server.lowlevel.server import Server as MCPServer
-from mcp.server.streamable_http import EventStore
 
 from .streamable_http import (
     MCP_SESSION_ID_HEADER,
     StreamableHTTPServerTransport,
 )
+from .types import EventStore
+from .types import Server as MCPServer
 
 logger = logging.getLogger(__name__)
 
