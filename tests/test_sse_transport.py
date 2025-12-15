@@ -1,3 +1,32 @@
+"""
+Tests for SSE (Server-Sent Events) Transport.
+
+This module tests the SSE transport layer used for real-time MCP communication.
+The SSE transport is the default transport mode for aiohttp-mcp and provides:
+- Persistent connections using Server-Sent Events
+- Real-time message streaming from server to client
+- POST endpoint for client-to-server messages
+- Session management via query parameters
+
+Test Coverage:
+- MessageConverter: JSON-RPC message serialization and deserialization
+- Stream: Memory stream creation and lifecycle management
+- SSEServerTransport: Full integration tests with real HTTP clients
+  - Connection establishment via SSE
+  - Message routing and session handling
+  - Error cases (invalid session, malformed JSON, etc.)
+
+When to Add Tests Here:
+- Testing SSE-specific functionality (event streams, keep-alive)
+- Testing MessageConverter utility functions
+- Integration tests requiring real HTTP connections via TestClient
+- Session management for SSE connections
+
+Related Test Files:
+- test_streamable_http_unit.py: Unit tests for Streamable HTTP transport
+- test_streamable_http_integration.py: Integration tests for Streamable HTTP transport
+"""
+
 import logging
 import uuid
 from collections.abc import AsyncIterator

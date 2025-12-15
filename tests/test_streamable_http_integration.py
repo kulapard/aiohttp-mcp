@@ -1,13 +1,66 @@
 """
-Tests for StreamableHTTP transport functionality.
+Integration Tests for StreamableHTTP Transport.
 
-This module provides comprehensive test coverage for:
-- StreamableHTTPServerTransport: Core transport implementation
-- StreamableHTTPSessionManager: Session management and orchestration
-- Integration with AppBuilder and MCP clients
-- Both stateful and stateless operation modes
-- Event replay and resumability features
-- Error handling and edge cases
+This module provides comprehensive integration tests for the StreamableHTTP transport
+layer using real MCP servers, session managers, and end-to-end scenarios.
+Unlike the unit tests (test_streamable_http_unit.py) which use mocked requests,
+these tests exercise the full stack with real components.
+
+The StreamableHTTP transport is an advanced transport mode that supports:
+- Both stateful (session-based) and stateless operation
+- GET/POST/DELETE endpoints for full session lifecycle
+- Event store integration for resumability and reconnection
+- JSON and SSE response modes
+- FastMCP-compatible session management patterns
+
+Test Coverage:
+- StreamableHTTPServerTransport: Integration with real MCP servers
+  - Full request/response lifecycle with message handling
+  - JSON response mode with request/response matching
+  - Session validation and routing
+  - Protocol version negotiation
+  - DELETE endpoint for session termination
+
+- StreamableHTTPSessionManager: Session orchestration and lifecycle
+  - Stateful mode: session creation, reuse, and routing
+  - Stateless mode: fresh transport per request
+  - Concurrent session operations
+  - Session cleanup on termination
+
+- AppBuilder Integration:
+  - Building apps with streamable transport mode
+  - Mixed transport modes (SSE + Streamable in one app)
+  - Sub-application setup
+
+- Event Store and Resumability:
+  - Event storage and replay after disconnection
+  - Last-Event-ID header handling
+  - Multiple event streams
+
+- Error Handling:
+  - Connection cleanup on errors
+  - Malformed message handling
+  - Concurrent operation safety
+  - Resource cleanup on termination
+
+Testing Approach:
+- Uses real MCP Server instances with registered tools
+- Creates actual aiohttp applications and request handlers
+- Tests end-to-end message flow from request to response
+- Uses anyio task groups for concurrent operation testing
+- Includes MockEventStore for resumability testing
+
+When to Add Tests Here:
+- Testing end-to-end scenarios with real MCP servers
+- Testing SessionManager behavior and session lifecycle
+- Testing AppBuilder integration and app configuration
+- Testing event store integration and resumability
+- Testing concurrent operations and race conditions
+- Testing resource cleanup and error recovery
+
+Related Test Files:
+- test_streamable_http_unit.py: Unit tests with mocked requests
+- test_sse_transport.py: Tests for SSE transport mode
 """
 
 import asyncio
@@ -814,49 +867,3 @@ class TestErrorHandling:
             # All streams should be cleaned up
             assert len(transport_stateful._request_streams) == 0
             assert transport_stateful._terminated is True
-
-    async def test_get_request_establishes_sse_connection(
-        self, transport_stateful: StreamableHTTPServerTransport
-    ) -> None:
-        """Test that GET requests establish SSE connections."""
-        request = create_mock_request(
-            method="GET",
-            headers={
-                "accept": CONTENT_TYPE_SSE,
-                MCP_SESSION_ID_HEADER: "test-session",
-                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
-            },
-        )
-
-        async with transport_stateful.connect():
-            # Note: This will fail unless properly integrated with an SSE loop
-            # This test documents the expected behavior
-            response = await transport_stateful.handle_request(request)
-            # GET requests should return an SSE stream response
-            assert response is not None
-
-    async def test_create_event_data_with_event_id(self, transport_stateless: StreamableHTTPServerTransport) -> None:
-        """Test event data creation with explicit event ID."""
-        message = JSONRPCMessage(root=JSONRPCNotification(jsonrpc="2.0", method="test", params={"data": "value"}))
-        event_message = EventMessage(message=message, event_id="custom-event-id")
-
-        event_data = transport_stateless._create_event_data(event_message)
-
-        assert event_data.event_type == EventType.MESSAGE
-        assert event_data.data is not None
-        # Should use the event_id from the EventMessage
-        assert event_data.event_id == "custom-event-id"
-
-    async def test_json_mode_missing_accept_header(self, transport_json_mode: StreamableHTTPServerTransport) -> None:
-        """Test JSON mode with missing accept header."""
-        # Request without accept header
-        request = create_mock_request(
-            method="POST",
-            headers={"content-type": CONTENT_TYPE_JSON},
-            body_text='{"jsonrpc": "2.0", "method": "test", "id": "1"}',
-        )
-
-        async with transport_json_mode.connect():
-            response = await transport_json_mode.handle_request(request)
-            # Should return 406 Not Acceptable when accept header is missing
-            assert response.status == HTTPStatus.NOT_ACCEPTABLE
