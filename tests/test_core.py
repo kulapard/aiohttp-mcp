@@ -1,5 +1,6 @@
 import pytest
 from aiohttp import web
+from mcp.server.fastmcp.exceptions import ToolError
 
 from aiohttp_mcp import AiohttpMCP
 from aiohttp_mcp.types import Annotations, Icon, TextContent, Tool
@@ -308,3 +309,30 @@ async def test_event_store_property() -> None:
 
     event_store = mcp.event_store
     assert event_store is None
+
+
+async def test_call_tool_with_nonexistent_tool() -> None:
+    """Test calling a tool that doesn't exist."""
+    mcp = AiohttpMCP()
+
+    # Calling non-existent tool should raise a ToolError
+    with pytest.raises(ToolError, match="Unknown tool"):
+        await mcp.call_tool("nonexistent_tool", {})
+
+
+async def test_get_prompt_with_nonexistent_prompt() -> None:
+    """Test getting a prompt that doesn't exist."""
+    mcp = AiohttpMCP()
+
+    # Getting non-existent prompt should raise a ValueError
+    with pytest.raises(ValueError, match="Unknown prompt"):
+        await mcp.get_prompt("nonexistent_prompt", {})
+
+
+async def test_read_resource_with_invalid_uri() -> None:
+    """Test read_resource with invalid or non-existent URI."""
+    mcp = AiohttpMCP()
+
+    # Reading non-existent resource should raise a ValueError
+    with pytest.raises(ValueError, match="Unknown resource"):
+        await mcp.read_resource("invalid://nonexistent")

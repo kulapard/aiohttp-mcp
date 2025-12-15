@@ -1,6 +1,7 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from unittest.mock import MagicMock
 
 import pytest
 from aiohttp import web
@@ -209,3 +210,70 @@ async def test_transport_mode_enum() -> None:
     assert TransportMode.STREAMABLE_HTTP.value == "streamable_http"
     assert str(TransportMode.SSE) == "sse"
     assert str(TransportMode.STREAMABLE_HTTP) == "streamable_http"
+
+
+async def test_app_builder_with_invalid_transport_mode() -> None:
+    """Test AppBuilder initialization with invalid transport mode."""
+    mcp = AiohttpMCP()
+
+    # Create an invalid transport mode by passing a string that's not in the enum
+    with pytest.raises(ValueError, match="Unsupported transport mode"):
+        AppBuilder(mcp=mcp, path=TEST_PATH, transport_mode="invalid")  # type: ignore[arg-type]
+
+
+async def test_sse_handler_without_initialization() -> None:
+    """Test SSE handler when SSE transport is not initialized."""
+    mcp = AiohttpMCP()
+    # Create app builder with STREAMABLE_HTTP mode, so _sse will be None
+    app_builder = AppBuilder(mcp=mcp, path=TEST_PATH, transport_mode=TransportMode.STREAMABLE_HTTP)
+
+    # Manually set _sse to None and try to call sse_handler
+    app_builder._sse = None
+
+    # Create a mock request
+    mock_request = MagicMock(spec=web.Request)
+
+    with pytest.raises(RuntimeError, match="SSE transport not initialized"):
+        await app_builder.sse_handler(mock_request)
+
+
+async def test_message_handler_without_initialization() -> None:
+    """Test message handler when SSE transport is not initialized."""
+    mcp = AiohttpMCP()
+    # Create app builder with STREAMABLE_HTTP mode, so _sse will be None
+    app_builder = AppBuilder(mcp=mcp, path=TEST_PATH, transport_mode=TransportMode.STREAMABLE_HTTP)
+
+    # Create a mock request
+    mock_request = MagicMock(spec=web.Request)
+
+    with pytest.raises(RuntimeError, match="SSE transport not initialized"):
+        await app_builder.message_handler(mock_request)
+
+
+async def test_streamable_handler_without_initialization() -> None:
+    """Test streamable HTTP handler when session manager is not initialized."""
+    mcp = AiohttpMCP()
+    # Create app builder with SSE mode, so _session_manager will be None
+    app_builder = AppBuilder(mcp=mcp, path=TEST_PATH, transport_mode=TransportMode.SSE)
+
+    # Manually set _session_manager to None
+    app_builder._session_manager = None
+
+    # Create a mock request
+    mock_request = MagicMock(spec=web.Request)
+
+    with pytest.raises(RuntimeError, match="Session manager not initialized"):
+        await app_builder.streamable_http_handler(mock_request)
+
+
+async def test_setup_routes_with_empty_path() -> None:
+    """Test route setup with empty path (for subapps)."""
+    mcp = AiohttpMCP()
+    app_builder = AppBuilder(mcp=mcp, path=TEST_PATH)
+
+    app = web.Application()
+    app_builder.setup_routes(app, path="")
+
+    # Verify routes are set up with empty path
+    assert has_route(app, "GET", "")
+    assert has_route(app, "POST", "")

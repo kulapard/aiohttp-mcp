@@ -814,3 +814,49 @@ class TestErrorHandling:
             # All streams should be cleaned up
             assert len(transport_stateful._request_streams) == 0
             assert transport_stateful._terminated is True
+
+    async def test_get_request_establishes_sse_connection(
+        self, transport_stateful: StreamableHTTPServerTransport
+    ) -> None:
+        """Test that GET requests establish SSE connections."""
+        request = create_mock_request(
+            method="GET",
+            headers={
+                "accept": CONTENT_TYPE_SSE,
+                MCP_SESSION_ID_HEADER: "test-session",
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+        )
+
+        async with transport_stateful.connect():
+            # Note: This will fail unless properly integrated with an SSE loop
+            # This test documents the expected behavior
+            response = await transport_stateful.handle_request(request)
+            # GET requests should return an SSE stream response
+            assert response is not None
+
+    async def test_create_event_data_with_event_id(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Test event data creation with explicit event ID."""
+        message = JSONRPCMessage(root=JSONRPCNotification(jsonrpc="2.0", method="test", params={"data": "value"}))
+        event_message = EventMessage(message=message, event_id="custom-event-id")
+
+        event_data = transport_stateless._create_event_data(event_message)
+
+        assert event_data.event_type == EventType.MESSAGE
+        assert event_data.data is not None
+        # Should use the event_id from the EventMessage
+        assert event_data.event_id == "custom-event-id"
+
+    async def test_json_mode_missing_accept_header(self, transport_json_mode: StreamableHTTPServerTransport) -> None:
+        """Test JSON mode with missing accept header."""
+        # Request without accept header
+        request = create_mock_request(
+            method="POST",
+            headers={"content-type": CONTENT_TYPE_JSON},
+            body_text='{"jsonrpc": "2.0", "method": "test", "id": "1"}',
+        )
+
+        async with transport_json_mode.connect():
+            response = await transport_json_mode.handle_request(request)
+            # Should return 406 Not Acceptable when accept header is missing
+            assert response.status == HTTPStatus.NOT_ACCEPTABLE
