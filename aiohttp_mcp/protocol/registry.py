@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import AnyUrl
 
-from .context import Context, find_context_kwarg, get_current_context
+from .context import Context, RequestContext, find_context_kwarg, get_current_context
 from .func_metadata import FuncMetadata, func_metadata
 from .models import (
     Annotations,
@@ -191,11 +191,7 @@ class Registry:
     async def list_tools(self) -> list[Tool]:
         tools: list[Tool] = []
         for td in self._tools.values():
-            schema = td.fn_metadata.arg_model.model_json_schema()
-            # Clean up pydantic schema artifacts
-            schema.pop("title", None)
-            if "description" in schema:
-                schema.pop("description", None)
+            schema = td.fn_metadata.arg_model.clean_schema()
             tools.append(
                 Tool(
                     name=td.name,
@@ -218,7 +214,7 @@ class Registry:
             try:
                 ctx = get_current_context()
             except ValueError:
-                ctx = Context(request_context=type("RC", (), {"request": None, "lifespan_context": None})())  # type: ignore[arg-type]
+                ctx = Context(request_context=RequestContext())
             extra_args = {td.context_kwarg: ctx}
 
         try:

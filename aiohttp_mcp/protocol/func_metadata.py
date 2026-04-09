@@ -11,16 +11,32 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, create_model
 from pydantic.fields import FieldInfo
+from pydantic.json_schema import GenerateJsonSchema
 
 
 class InvalidSignature(Exception):
     """Raised when a function has an invalid signature for MCP tool use."""
 
 
+class _CleanSchemaGenerator(GenerateJsonSchema):
+    """JSON Schema generator that omits the root 'title' added by pydantic."""
+
+    def generate(self, schema: Any, mode: str = "validation") -> dict[str, Any]:
+        json_schema = super().generate(schema, mode=mode)
+        json_schema.pop("title", None)
+        json_schema.pop("description", None)
+        return json_schema
+
+
 class ArgModelBase(BaseModel):
     """Base model for dynamically generated argument models."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @classmethod
+    def clean_schema(cls) -> dict[str, Any]:
+        """Generate JSON Schema without pydantic artifacts (title, description)."""
+        return cls.model_json_schema(schema_generator=_CleanSchemaGenerator)
 
     def model_dump_one_level(self) -> dict[str, Any]:
         """Return a dict of the model's fields, one level deep.
