@@ -11,14 +11,19 @@
 
 Tools for building [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers on top of [aiohttp](https://docs.aiohttp.org/).
 
+Implements the MCP protocol natively — no heavy SDK dependencies. Only 3 runtime dependencies: `aiohttp`, `aiohttp-sse`, `pydantic`.
+
 ## Features
 
+- Native MCP protocol implementation (MCP spec 2025-11-25)
+- Streamable HTTP transport with SSE streaming
 - Easy integration with aiohttp web applications
-- Support for Model Context Protocol (MCP) tools
-- Async-first design
-- Type hints support
-- Debug mode for development
-- Flexible routing options
+- Tool, Resource, and Prompt support with decorator-based registration
+- Lifespan context (shared resources) and request context (per-request data)
+- Stateful and stateless operation modes
+- Event store support for resumability
+- Async-first design with full type hints
+- JSON response mode for non-streaming deployments
 
 ## Installation
 
@@ -97,49 +102,87 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
-### Using Streamable HTTP Transport
+### Stateless Mode
 
-For production deployments requiring advanced session management, you can use the streamable HTTP transport mode:
+For load-balanced deployments where requests can be handled by any server instance:
 
 ```python
-import datetime
-from zoneinfo import ZoneInfo
-
 from aiohttp import web
 
-from aiohttp_mcp import AiohttpMCP, TransportMode, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
-# Initialize MCP
 mcp = AiohttpMCP()
 
 
-# Define a tool
 @mcp.tool()
-def get_time(timezone: str) -> str:
-    """Get the current time in the specified timezone."""
-    tz = ZoneInfo(timezone)
-    return datetime.datetime.now(tz).isoformat()
+def echo(message: str) -> str:
+    """Echo a message back."""
+    return message
 
 
-# Create application with streamable transport
-app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE_HTTP, stateless=True)
+app = build_mcp_app(mcp, path="/mcp", stateless=True)
 web.run_app(app)
+```
+
+### Context Access
+
+Tools can access HTTP request data (headers, cookies, client IP) and shared resources via the `Context` parameter:
+
+```python
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+
+from aiohttp_mcp import AiohttpMCP, Context
+
+
+@dataclass
+class AppContext:
+    db_pool: object
+
+
+@asynccontextmanager
+async def app_lifespan(server):
+    db_pool = await create_db_pool()
+    try:
+        yield AppContext(db_pool=db_pool)
+    finally:
+        await db_pool.close()
+
+
+mcp = AiohttpMCP(lifespan=app_lifespan)
+
+
+@mcp.tool()
+async def secure_query(sql: str, ctx: Context) -> str:
+    """Run a database query with auth validation."""
+    # Access HTTP request
+    request = ctx.request_context.request
+    user_id = request.headers.get("X-User-ID", "anonymous")
+
+    # Access shared resources from lifespan
+    db_pool = ctx.request_context.lifespan_context.db_pool
+
+    return f"Query by {user_id}: {sql}"
 ```
 
 ### Client Example
 
-Here's how to create a client that interacts with the MCP server:
+Here's how to create a client that interacts with the MCP server using the `mcp` client library:
 
 ```python
 import asyncio
 
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 
 async def main():
     # Connect to the MCP server
-    async with sse_client("http://localhost:8080/mcp") as (read_stream, write_stream):
+    async with streamablehttp_client("http://localhost:8080/mcp") as (
+        read_stream,
+        write_stream,
+        _,
+    ):
         async with ClientSession(read_stream, write_stream) as session:
             # Initialize the session
             await session.initialize()
@@ -193,11 +236,10 @@ uv run pytest
 
 ## Requirements
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - aiohttp >= 3.9.0, < 4.0.0
 - aiohttp-sse >= 2.2.0, < 3.0.0
-- anyio >= 4.9.0, < 5.0.0
-- mcp >= 1.8.0, < 2.0.0
+- pydantic >= 2.0.0, < 3.0.0
 
 ## License
 
