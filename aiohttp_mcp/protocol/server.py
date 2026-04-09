@@ -31,6 +31,7 @@ from .models import (
 )
 from .registry import Registry
 from .streams import StreamReader, StreamWriter
+from .versions import dump_for_version
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class MCPServer:
             "instructions": self.instructions,
         }
 
-    async def run(
+    async def run(  # noqa: C901
         self,
         read_stream: StreamReader[SessionMessage | Exception],
         write_stream: StreamWriter[SessionMessage],
@@ -81,7 +82,7 @@ class MCPServer:
         async with AsyncExitStack() as stack:
             lifespan_context = await stack.enter_async_context(self._lifespan(self))
 
-            initialized = False
+            negotiated_version = LATEST_PROTOCOL_VERSION
 
             async def send_response(
                 msg: JSONRPCResponse | JSONRPCError,
@@ -107,8 +108,8 @@ class MCPServer:
                     metadata=metadata,
                 )
 
-            async def handle_message(session_message: SessionMessage) -> None:
-                nonlocal initialized
+            async def handle_message(session_message: SessionMessage) -> None:  # noqa: C901
+                nonlocal negotiated_version
 
                 message = session_message.message
                 request_context_data = None
@@ -120,7 +121,6 @@ class MCPServer:
                 # Handle notifications (no response needed)
                 if isinstance(root, JSONRPCNotification):
                     if root.method == "notifications/initialized":
-                        initialized = True
                         logger.debug("Client sent initialized notification")
                     elif root.method == "notifications/cancelled":
                         logger.debug("Received cancellation notification")
@@ -149,7 +149,7 @@ class MCPServer:
 
                 try:
                     if method == "initialize":
-                        result = await self._handle_initialize(params)
+                        result, negotiated_version = self._handle_initialize(params)
                         await send_response(
                             JSONRPCResponse(id=request_id, result=result),
                             metadata=response_metadata,
@@ -174,7 +174,7 @@ class MCPServer:
                     token = set_current_context(ctx)
 
                     try:
-                        result = await self._dispatch(method, params)
+                        result = await self._dispatch(method, params, negotiated_version)
                         await send_response(
                             JSONRPCResponse(id=request_id, result=result),
                             metadata=response_metadata,
@@ -204,8 +204,8 @@ class MCPServer:
 
                     tg.create_task(handle_message(message))
 
-    async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
-        """Handle the initialize request."""
+    def _handle_initialize(self, params: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        """Handle the initialize request. Returns (result_dict, negotiated_version)."""
         client_version = params.get("protocolVersion", LATEST_PROTOCOL_VERSION)
 
         # Negotiate version: use client's version if supported, else our latest
@@ -232,13 +232,17 @@ class MCPServer:
             instructions=self.instructions,
         )
 
-        return result.model_dump(by_alias=True, exclude_none=True)
+        # Serialize with version-aware field handling
+        result_dict = result.model_dump(by_alias=True, exclude_none=True)
+        result_dict["serverInfo"] = dump_for_version(server_info, negotiated_version)
 
-    async def _dispatch(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        return result_dict, negotiated_version
+
+    async def _dispatch(self, method: str, params: dict[str, Any], version: str) -> dict[str, Any]:
         """Dispatch a JSON-RPC method to the appropriate handler."""
         if method == "tools/list":
             tools = await self.registry.list_tools()
-            return {"tools": [t.model_dump(by_alias=True, exclude_none=True) for t in tools]}
+            return {"tools": [dump_for_version(t, version) for t in tools]}
 
         elif method == "tools/call":
             name = params.get("name", "")
@@ -246,7 +250,7 @@ class MCPServer:
             try:
                 content = await self.registry.call_tool(name, arguments)
                 return {
-                    "content": [c.model_dump(by_alias=True, exclude_none=True) for c in content],
+                    "content": [dump_for_version(c, version) for c in content],
                     "isError": False,
                 }
             except Exception as e:
@@ -257,28 +261,28 @@ class MCPServer:
 
         elif method == "resources/list":
             resources = await self.registry.list_resources()
-            return {"resources": [r.model_dump(by_alias=True, exclude_none=True) for r in resources]}
+            return {"resources": [dump_for_version(r, version) for r in resources]}
 
         elif method == "resources/read":
             uri = params.get("uri", "")
             contents = await self.registry.read_resource(uri)
             return {
-                "contents": [c.model_dump(by_alias=True, exclude_none=True) for c in contents],
+                "contents": [dump_for_version(c, version) for c in contents],
             }
 
         elif method == "resources/templates/list":
             templates = await self.registry.list_resource_templates()
-            return {"resourceTemplates": [t.model_dump(by_alias=True, exclude_none=True) for t in templates]}
+            return {"resourceTemplates": [dump_for_version(t, version) for t in templates]}
 
         elif method == "prompts/list":
             prompts = await self.registry.list_prompts()
-            return {"prompts": [p.model_dump(by_alias=True, exclude_none=True) for p in prompts]}
+            return {"prompts": [dump_for_version(p, version) for p in prompts]}
 
         elif method == "prompts/get":
             name = params.get("name", "")
             arguments = params.get("arguments")
             result = await self.registry.get_prompt(name, arguments)
-            return result.model_dump(by_alias=True, exclude_none=True)
+            return dump_for_version(result, version)
 
         else:
             raise _MethodNotFoundError(f"Method not found: {method}")
