@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Callable, Iterable, Sequence
-from contextlib import AbstractAsyncContextManager
 from typing import Any
 
 from aiohttp import web
@@ -41,7 +40,6 @@ class AiohttpMCP:
         warn_on_duplicate_resources: bool = True,
         warn_on_duplicate_tools: bool = True,
         warn_on_duplicate_prompts: bool = True,
-        lifespan: Callable[["AiohttpMCP"], AbstractAsyncContextManager[Any]] | None = None,
         event_store: EventStore | None = None,
     ) -> None:
         self._registry = Registry(
@@ -53,7 +51,6 @@ class AiohttpMCP:
             name=name,
             instructions=instructions,
             registry=self._registry,
-            lifespan=lifespan,
         )
         self._app: web.Application | None = None
         self._event_store = event_store
@@ -220,6 +217,6 @@ class AiohttpMCP:
         """Get a prompt by name with arguments."""
         return await self._registry.get_prompt(name, arguments)
 
-    def get_context(self) -> Context[Any]:
+    def get_context(self) -> Context:
         """Get the current request context."""
         return _get_current_context()

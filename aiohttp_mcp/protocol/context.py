@@ -1,37 +1,33 @@
 """Context system for MCP tools.
 
 Provides request context propagation via contextvars, with support for
-logging, progress reporting, and resource reading — matching the features
-available in FastMCP's Context.
+logging, progress reporting, and resource reading.
 """
 
 import contextvars
 import inspect
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
 
 if TYPE_CHECKING:
     from aiohttp.web import Request
 
 from .typedefs import NotificationSender, ResourceReader
 
-LifespanT = TypeVar("LifespanT")
-
 
 @dataclass
-class RequestContext(Generic[LifespanT]):
-    """Per-request context holding the aiohttp Request and lifespan context."""
+class RequestContext:
+    """Per-request context holding the aiohttp Request."""
 
     request_id: str | int | None = None
-    lifespan_context: LifespanT | None = None
     request: Request | None = None
     session: Any = None
     _send_notification: NotificationSender | None = field(default=None, repr=False)
     _read_resource: ResourceReader | None = field(default=None, repr=False)
 
 
-class Context(Generic[LifespanT]):
+class Context:
     """MCP tool context providing access to request data, logging, and progress.
 
     Tools can declare a parameter of this type to receive the context::
@@ -39,15 +35,15 @@ class Context(Generic[LifespanT]):
         @mcp.tool()
         async def my_tool(arg: str, ctx: Context) -> str:
             await ctx.info(f"Processing {arg}")
-            request = ctx.request_context.request
+            db = ctx.app["db_pool"]
             ...
     """
 
-    def __init__(self, request_context: RequestContext[LifespanT]) -> None:
+    def __init__(self, request_context: RequestContext) -> None:
         self._request_context = request_context
 
     @property
-    def request_context(self) -> RequestContext[LifespanT]:
+    def request_context(self) -> RequestContext:
         return self._request_context
 
     @property
@@ -81,13 +77,7 @@ class Context(Generic[LifespanT]):
         *,
         logger_name: str | None = None,
     ) -> None:
-        """Send a log message to the MCP client.
-
-        Args:
-            level: Log level (debug, info, warning, error)
-            message: Log message text
-            logger_name: Optional logger name
-        """
+        """Send a log message to the MCP client."""
         sender = self._request_context._send_notification
         if sender is None:
             return
@@ -120,13 +110,7 @@ class Context(Generic[LifespanT]):
         total: float | None = None,
         message: str | None = None,
     ) -> None:
-        """Report progress for the current operation.
-
-        Args:
-            progress: Current progress value (e.g. 24)
-            total: Optional total value (e.g. 100)
-            message: Optional progress message
-        """
+        """Report progress for the current operation."""
         sender = self._request_context._send_notification
         if sender is None:
             return
@@ -135,7 +119,6 @@ class Context(Generic[LifespanT]):
             params["total"] = total
         if message is not None:
             params["message"] = message
-        # Use request_id as progress token
         if self._request_context.request_id is not None:
             params["progressToken"] = self._request_context.request_id
         await sender("notifications/progress", params)
@@ -143,14 +126,7 @@ class Context(Generic[LifespanT]):
     # -- Resource reading --
 
     async def read_resource(self, uri: str) -> Iterable[Any]:
-        """Read a resource by URI.
-
-        Args:
-            uri: Resource URI to read
-
-        Returns:
-            The resource content
-        """
+        """Read a resource by URI."""
         reader = self._request_context._read_resource
         if reader is None:
             raise RuntimeError("read_resource is not available outside of a server request")
@@ -158,10 +134,10 @@ class Context(Generic[LifespanT]):
 
 
 # ContextVar for propagating the current context through async call chains
-_current_context: contextvars.ContextVar[Context[Any] | None] = contextvars.ContextVar("_current_context", default=None)
+_current_context: contextvars.ContextVar[Context | None] = contextvars.ContextVar("_current_context", default=None)
 
 
-def get_current_context() -> Context[Any]:
+def get_current_context() -> Context:
     """Get the current MCP context from the contextvar.
 
     Raises ValueError if no context is set.
@@ -172,16 +148,13 @@ def get_current_context() -> Context[Any]:
     return ctx
 
 
-def set_current_context(ctx: Context[Any] | None) -> contextvars.Token[Context[Any] | None]:
+def set_current_context(ctx: Context | None) -> contextvars.Token[Context | None]:
     """Set the current MCP context."""
     return _current_context.set(ctx)
 
 
 def find_context_kwarg(fn: Callable[..., Any]) -> str | None:
-    """Find the parameter name typed as Context in a function signature.
-
-    Returns the parameter name if found, or None.
-    """
+    """Find the parameter name typed as Context in a function signature."""
     try:
         sig = inspect.signature(fn, eval_str=True)
     except (ValueError, TypeError):
@@ -196,7 +169,6 @@ def find_context_kwarg(fn: Callable[..., Any]) -> str | None:
         origin = get_origin(annotation)
         if origin is Context:
             return param.name
-        # Check get_args for Annotated types etc.
         args = get_args(annotation)
         if args:
             for arg in args:

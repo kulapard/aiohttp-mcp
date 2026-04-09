@@ -6,8 +6,6 @@ dispatches to handlers, and writes responses back.
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from typing import Any
 
 from .context import Context, RequestContext, set_current_context
@@ -37,11 +35,6 @@ from .versions import dump_for_version
 logger = logging.getLogger(__name__)
 
 
-@asynccontextmanager
-async def _default_lifespan(server: Any) -> AsyncIterator[None]:
-    yield None
-
-
 class MCPServer:
     """Native MCP protocol server with JSON-RPC dispatch.
 
@@ -55,13 +48,11 @@ class MCPServer:
         version: str = "1.0.0",
         instructions: str | None = None,
         registry: Registry | None = None,
-        lifespan: Callable[..., AbstractAsyncContextManager[Any]] | None = None,
     ) -> None:
         self.name = name or "aiohttp-mcp"
         self.version = version
         self.instructions = instructions
         self.registry = registry or Registry()
-        self._lifespan = lifespan or _default_lifespan
 
     def create_initialization_options(self) -> dict[str, Any]:
         """Create initialization options dict (for compatibility with transport layer)."""
@@ -80,148 +71,144 @@ class MCPServer:
         stateless: bool = False,
     ) -> None:
         """Main dispatch loop - reads messages and dispatches to handlers."""
-        async with AsyncExitStack() as stack:
-            lifespan_context = await stack.enter_async_context(self._lifespan(self))
+        negotiated_version = LATEST_PROTOCOL_VERSION
 
-            negotiated_version = LATEST_PROTOCOL_VERSION
+        async def send_response(
+            msg: JSONRPCResponse | JSONRPCError,
+            metadata: ServerMessageMetadata | None = None,
+        ) -> None:
+            session_msg = SessionMessage(
+                message=JSONRPCMessage(root=msg),
+                metadata=metadata,
+            )
+            await write_stream.send(session_msg)
 
-            async def send_response(
-                msg: JSONRPCResponse | JSONRPCError,
-                metadata: ServerMessageMetadata | None = None,
-            ) -> None:
-                session_msg = SessionMessage(
-                    message=JSONRPCMessage(root=msg),
-                    metadata=metadata,
-                )
-                await write_stream.send(session_msg)
+        async def send_error(
+            request_id: str | int,
+            code: int,
+            message: str,
+            metadata: ServerMessageMetadata | None = None,
+        ) -> None:
+            await send_response(
+                JSONRPCError(
+                    id=request_id,
+                    error=ErrorData(code=code, message=message),
+                ),
+                metadata=metadata,
+            )
 
-            async def send_error(
-                request_id: str | int,
-                code: int,
-                message: str,
-                metadata: ServerMessageMetadata | None = None,
-            ) -> None:
-                await send_response(
-                    JSONRPCError(
-                        id=request_id,
-                        error=ErrorData(code=code, message=message),
-                    ),
-                    metadata=metadata,
-                )
+        async def handle_message(session_message: SessionMessage) -> None:  # noqa: C901
+            nonlocal negotiated_version
 
-            async def handle_message(session_message: SessionMessage) -> None:  # noqa: C901
-                nonlocal negotiated_version
+            message = session_message.message
+            request_context_data = None
+            if session_message.metadata and isinstance(session_message.metadata, ServerMessageMetadata):
+                request_context_data = session_message.metadata.request_context
 
-                message = session_message.message
-                request_context_data = None
-                if session_message.metadata and isinstance(session_message.metadata, ServerMessageMetadata):
-                    request_context_data = session_message.metadata.request_context
+            root = message.root
 
-                root = message.root
+            # Handle notifications (no response needed)
+            if isinstance(root, JSONRPCNotification):
+                if root.method == "notifications/initialized":
+                    logger.debug("Client sent initialized notification")
+                elif root.method == "notifications/cancelled":
+                    logger.debug("Received cancellation notification")
+                else:
+                    logger.debug("Received notification: %s", root.method)
+                return
 
-                # Handle notifications (no response needed)
-                if isinstance(root, JSONRPCNotification):
-                    if root.method == "notifications/initialized":
-                        logger.debug("Client sent initialized notification")
-                    elif root.method == "notifications/cancelled":
-                        logger.debug("Received cancellation notification")
-                    else:
-                        logger.debug("Received notification: %s", root.method)
+            # Handle responses from client (rare, for server-initiated requests)
+            if isinstance(root, JSONRPCResponse | JSONRPCError):
+                logger.debug("Received client response/error for id=%s", root.id)
+                return
+
+            # Handle requests
+            if not isinstance(root, JSONRPCRequest):
+                return
+
+            request_id = root.id
+            method = root.method
+            params = root.params or {}
+
+            # Build response metadata
+            response_metadata = ServerMessageMetadata(
+                related_request_id=request_id,
+                request_context=request_context_data,
+            )
+
+            try:
+                if method == "initialize":
+                    result, negotiated_version = self._handle_initialize(params)
+                    await send_response(
+                        JSONRPCResponse(id=request_id, result=result),
+                        metadata=response_metadata,
+                    )
                     return
 
-                # Handle responses from client (rare, for server-initiated requests)
-                if isinstance(root, JSONRPCResponse | JSONRPCError):
-                    logger.debug("Received client response/error for id=%s", root.id)
+                if method == "ping":
+                    await send_response(
+                        JSONRPCResponse(id=request_id, result={}),
+                        metadata=response_metadata,
+                    )
                     return
 
-                # Handle requests
-                if not isinstance(root, JSONRPCRequest):
-                    return
+                # Set context for tool/resource/prompt calls
+                async def _send_notification(method_name: str, params: dict[str, Any] | None) -> None:
+                    notif = JSONRPCNotification(method=method_name, params=params)
+                    msg = SessionMessage(
+                        message=JSONRPCMessage(root=notif),
+                        metadata=ServerMessageMetadata(related_request_id=request_id),
+                    )
+                    await write_stream.send(msg)
 
-                request_id = root.id
-                method = root.method
-                params = root.params or {}
-
-                # Build response metadata
-                response_metadata = ServerMessageMetadata(
-                    related_request_id=request_id,
-                    request_context=request_context_data,
+                ctx: Context = Context(
+                    RequestContext(
+                        request_id=request_id,
+                        request=request_context_data,
+                        _send_notification=_send_notification,
+                        _read_resource=self.registry.read_resource,
+                    )
                 )
+                set_current_context(ctx)
 
                 try:
-                    if method == "initialize":
-                        result, negotiated_version = self._handle_initialize(params)
-                        await send_response(
-                            JSONRPCResponse(id=request_id, result=result),
-                            metadata=response_metadata,
-                        )
-                        return
-
-                    if method == "ping":
-                        await send_response(
-                            JSONRPCResponse(id=request_id, result={}),
-                            metadata=response_metadata,
-                        )
-                        return
-
-                    # Set context for tool/resource/prompt calls
-                    async def _send_notification(method_name: str, params: dict[str, Any] | None) -> None:
-                        notif = JSONRPCNotification(method=method_name, params=params)
-                        msg = SessionMessage(
-                            message=JSONRPCMessage(root=notif),
-                            metadata=ServerMessageMetadata(related_request_id=request_id),
-                        )
-                        await write_stream.send(msg)
-
-                    ctx: Context[Any] = Context(
-                        RequestContext(
-                            request_id=request_id,
-                            lifespan_context=lifespan_context,
-                            request=request_context_data,
-                            _send_notification=_send_notification,
-                            _read_resource=self.registry.read_resource,
-                        )
-                    )
-                    set_current_context(ctx)
-
-                    try:
-                        result = await self._dispatch(method, params, negotiated_version)
-                        await send_response(
-                            JSONRPCResponse(id=request_id, result=result),
-                            metadata=response_metadata,
-                        )
-                    finally:
-                        set_current_context(None)
-
-                except _MethodNotFoundError as e:
-                    await send_error(
-                        request_id,
-                        METHOD_NOT_FOUND,
-                        str(e),
+                    result = await self._dispatch(method, params, negotiated_version)
+                    await send_response(
+                        JSONRPCResponse(id=request_id, result=result),
                         metadata=response_metadata,
                     )
+                finally:
+                    set_current_context(None)
 
-                except Exception as e:
-                    logger.exception("Error handling request %s: %s", method, e)
+            except _MethodNotFoundError as e:
+                await send_error(
+                    request_id,
+                    METHOD_NOT_FOUND,
+                    str(e),
+                    metadata=response_metadata,
+                )
+
+            except Exception as e:
+                logger.exception("Error handling request %s: %s", method, e)
+                if raise_exceptions:
+                    raise
+                await send_error(
+                    request_id,
+                    INTERNAL_ERROR,
+                    str(e),
+                    metadata=response_metadata,
+                )
+
+        # Main message loop
+        async with asyncio.TaskGroup() as tg:
+            async for message in read_stream:
+                if isinstance(message, Exception):
+                    logger.error("Received exception from stream: %s", message)
                     if raise_exceptions:
-                        raise
-                    await send_error(
-                        request_id,
-                        INTERNAL_ERROR,
-                        str(e),
-                        metadata=response_metadata,
-                    )
+                        raise message
+                    continue
 
-            # Main message loop
-            async with asyncio.TaskGroup() as tg:
-                async for message in read_stream:
-                    if isinstance(message, Exception):
-                        logger.error("Received exception from stream: %s", message)
-                        if raise_exceptions:
-                            raise message
-                        continue
-
-                    tg.create_task(handle_message(message))
+                tg.create_task(handle_message(message))
 
     def _handle_initialize(self, params: dict[str, Any]) -> tuple[dict[str, Any], str]:
         """Handle the initialize request. Returns (result_dict, negotiated_version)."""

@@ -70,7 +70,7 @@ def registry() -> Registry:
         """A tool that always fails."""
         raise ValueError("Something went wrong")
 
-    async def context_tool(ctx: Context[Any]) -> str:
+    async def context_tool(ctx: Context) -> str:
         """A tool that reads context."""
         return f"request_id={ctx.request_id}"
 
@@ -296,7 +296,7 @@ class TestContextNotifications:
         """Tools using ctx.info() should produce notifications on the write stream."""
         registry = server.registry
 
-        async def logging_tool(ctx: Context[Any]) -> str:
+        async def logging_tool(ctx: Context) -> str:
             await ctx.info("Processing request")
             return "done"
 
