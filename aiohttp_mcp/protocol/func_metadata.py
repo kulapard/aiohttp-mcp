@@ -6,7 +6,7 @@ JSON Schema for MCP tool inputSchema. Ported from FastMCP's func_metadata.
 
 import inspect
 import json
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Callable, Sequence
 from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, create_model
@@ -60,7 +60,7 @@ class FuncMetadata(BaseModel):
 
     async def call_fn_with_arg_validation(
         self,
-        fn: Callable[..., Any | Awaitable[Any]],
+        fn: Callable[..., Any],
         fn_is_async: bool,
         arguments_to_validate: dict[str, Any],
         arguments_to_pass_directly: dict[str, Any] | None,

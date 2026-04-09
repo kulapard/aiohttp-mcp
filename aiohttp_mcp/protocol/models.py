@@ -24,6 +24,7 @@ INTERNAL_ERROR: int = -32603
 RequestId = StrictInt | str
 AnyFunction = Callable[..., Any]
 
+
 # ---------------------------------------------------------------------------
 # Protocol version constants
 # ---------------------------------------------------------------------------
