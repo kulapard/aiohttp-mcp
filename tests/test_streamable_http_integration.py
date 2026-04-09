@@ -71,36 +71,34 @@ from http import HTTPStatus
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import anyio
 import pytest
 from aiohttp import HttpVersion, web
-from mcp.server.lowlevel.server import Server
-from mcp.server.streamable_http import EventMessage, EventStore
-from mcp.shared.message import SessionMessage
-from mcp.types import (
+
+from aiohttp_mcp import AiohttpMCP, AppBuilder, build_mcp_app
+from aiohttp_mcp.protocol.messages import EventMessage, EventStore, SessionMessage
+from aiohttp_mcp.protocol.models import (
     JSONRPCMessage,
     JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
 )
-
-from aiohttp_mcp import AiohttpMCP, AppBuilder, TransportMode, build_mcp_app
+from aiohttp_mcp.protocol.server import MCPServer
 from aiohttp_mcp.streamable_http import (
     CONTENT_TYPE_JSON,
     CONTENT_TYPE_SSE,
     MCP_PROTOCOL_VERSION_HEADER,
     MCP_SESSION_ID_HEADER,
+    EventType,
     StreamableHTTPServerTransport,
 )
 from aiohttp_mcp.streamable_http_manager import StreamableHTTPSessionManager
-from aiohttp_mcp.transport import EventType
 
 from .utils import register_mcp_resources
 
 logger = logging.getLogger(__name__)
 
 # Set the pytest marker for async tests/fixtures
-pytestmark = pytest.mark.anyio
+pytestmark = pytest.mark.asyncio
 
 TEST_PATH = "/streamable-mcp"
 
@@ -183,7 +181,7 @@ def mock_event_store() -> MockEventStore:
 
 
 @pytest.fixture
-def mcp_server() -> Server[Any]:
+def mcp_server() -> MCPServer:
     """Create an AiohttpMCP server for testing."""
     mcp = AiohttpMCP("test-server")
 
@@ -196,7 +194,7 @@ def mcp_server() -> Server[Any]:
 
 
 @pytest.fixture
-def transport_stateless(mcp_server: Server[Any]) -> StreamableHTTPServerTransport:
+def transport_stateless(mcp_server: MCPServer) -> StreamableHTTPServerTransport:
     """Create a stateless StreamableHTTPServerTransport."""
     return StreamableHTTPServerTransport(
         mcp_session_id=None,
@@ -206,7 +204,7 @@ def transport_stateless(mcp_server: Server[Any]) -> StreamableHTTPServerTranspor
 
 
 @pytest.fixture
-def transport_stateful(mcp_server: Server[Any], mock_event_store: MockEventStore) -> StreamableHTTPServerTransport:
+def transport_stateful(mcp_server: MCPServer, mock_event_store: MockEventStore) -> StreamableHTTPServerTransport:
     """Create a stateful StreamableHTTPServerTransport with session ID."""
     return StreamableHTTPServerTransport(
         mcp_session_id="test-session-123",
@@ -216,7 +214,7 @@ def transport_stateful(mcp_server: Server[Any], mock_event_store: MockEventStore
 
 
 @pytest.fixture
-def transport_json_mode(mcp_server: Server[Any]) -> StreamableHTTPServerTransport:
+def transport_json_mode(mcp_server: MCPServer) -> StreamableHTTPServerTransport:
     """Create a transport with JSON response mode enabled."""
     return StreamableHTTPServerTransport(
         mcp_session_id="json-session-456",
@@ -226,7 +224,7 @@ def transport_json_mode(mcp_server: Server[Any]) -> StreamableHTTPServerTranspor
 
 
 @pytest.fixture
-def session_manager_stateful(mcp_server: Server[Any], mock_event_store: MockEventStore) -> StreamableHTTPSessionManager:
+def session_manager_stateful(mcp_server: MCPServer, mock_event_store: MockEventStore) -> StreamableHTTPSessionManager:
     """Create a stateful session manager."""
     return StreamableHTTPSessionManager(
         server=mcp_server,
@@ -237,7 +235,7 @@ def session_manager_stateful(mcp_server: Server[Any], mock_event_store: MockEven
 
 
 @pytest.fixture
-def session_manager_stateless(mcp_server: Server[Any]) -> StreamableHTTPSessionManager:
+def session_manager_stateless(mcp_server: MCPServer) -> StreamableHTTPSessionManager:
     """Create a stateless session manager."""
     return StreamableHTTPSessionManager(
         server=mcp_server,
@@ -290,8 +288,8 @@ async def create_test_app(
                         if isinstance(msg, SessionMessage):
                             await write_stream.send(msg)
 
-                async with anyio.create_task_group() as tg:
-                    tg.start_soon(echo_handler)
+                async with asyncio.TaskGroup() as tg:
+                    tg.create_task(echo_handler())
                     result = await transport_or_manager.handle_request(request)
                 return result  # type: ignore[no-any-return]
 
@@ -457,9 +455,9 @@ class TestStreamableHTTPServerTransport:
                 )
                 await write_stream.send(SessionMessage(response_msg))
 
-            async with anyio.create_task_group() as tg:
+            async with asyncio.TaskGroup() as tg:
                 # Start the mock server to handle incoming requests
-                tg.start_soon(mock_server)
+                tg.create_task(mock_server())
 
                 # Process the request - this should complete when the response arrives
                 response = await transport_json_mode.handle_request(request)
@@ -485,9 +483,9 @@ class TestStreamableHTTPServerTransport:
                 session_msg = await read_stream.receive()
                 assert isinstance(session_msg, SessionMessage)
 
-            async with anyio.create_task_group() as tg:
+            async with asyncio.TaskGroup() as tg:
                 # Start the message consumer
-                tg.start_soon(consume_message)
+                tg.create_task(consume_message())
 
                 # Process the request
                 response = await transport_json_mode.handle_request(request)
@@ -567,7 +565,7 @@ class TestStreamableHTTPServerTransport:
 class TestStreamableHTTPSessionManager:
     """Test cases for StreamableHTTPSessionManager."""
 
-    def test_init_stateful_mode(self, mcp_server: Server[Any], mock_event_store: MockEventStore) -> None:
+    def test_init_stateful_mode(self, mcp_server: MCPServer, mock_event_store: MockEventStore) -> None:
         """Test initialization in stateful mode."""
         manager = StreamableHTTPSessionManager(
             server=mcp_server,
@@ -580,7 +578,7 @@ class TestStreamableHTTPSessionManager:
         assert manager.json_response is True
         assert manager.stateless is False
 
-    def test_init_stateless_mode(self, mcp_server: Server[Any]) -> None:
+    def test_init_stateless_mode(self, mcp_server: MCPServer) -> None:
         """Test initialization in stateless mode."""
         manager = StreamableHTTPSessionManager(
             server=mcp_server,
@@ -694,12 +692,11 @@ class TestAppBuilderIntegration:
         register_mcp_resources(mcp)
         return mcp
 
-    async def test_app_builder_streamable_mode(self, mcp_registry: AiohttpMCP, mcp_server: Server[Any]) -> None:
+    async def test_app_builder_streamable_mode(self, mcp_registry: AiohttpMCP, mcp_server: MCPServer) -> None:
         """Test AppBuilder with streamable transport mode."""
         app_builder = AppBuilder(
             mcp=mcp_registry,
             path=TEST_PATH,
-            transport_mode=TransportMode.STREAMABLE_HTTP,
             json_response=False,
             stateless=False,
         )
@@ -717,40 +714,9 @@ class TestAppBuilderIntegration:
         app = build_mcp_app(
             mcp_registry,
             path=TEST_PATH,
-            transport_mode=TransportMode.STREAMABLE_HTTP,
             json_response=True,
             stateless=True,
         )
-
-        assert isinstance(app, web.Application)
-
-    async def test_mixed_transport_modes(self, mcp_registry: AiohttpMCP) -> None:
-        """Test application with both SSE and streamable transports."""
-        app = web.Application()
-
-        # Add SSE subapp
-        mcp_sse = AiohttpMCP()
-        register_mcp_resources(mcp_sse)
-
-        sse_builder = AppBuilder(
-            mcp=mcp_sse,
-            path="/sse",
-            transport_mode=TransportMode.SSE,
-        )
-        sse_app = sse_builder.build(is_subapp=True)
-        app.add_subapp("/sse", sse_app)
-
-        # Add streamable subapp
-        mcp_streamable = AiohttpMCP()
-        register_mcp_resources(mcp_streamable)
-
-        streamable_builder = AppBuilder(
-            mcp=mcp_streamable,
-            path="/streamable",
-            transport_mode=TransportMode.STREAMABLE_HTTP,
-        )
-        streamable_app = streamable_builder.build(is_subapp=True)
-        app.add_subapp("/streamable", streamable_app)
 
         assert isinstance(app, web.Application)
 
@@ -800,7 +766,7 @@ class TestEventStore:
         assert replayed_events[0].message.root.method == "test_1"
         assert replayed_events[1].message.root.method == "test_2"
 
-    async def test_transport_with_event_store(self, mcp_server: Server[Any], mock_event_store: MockEventStore) -> None:
+    async def test_transport_with_event_store(self, mcp_server: MCPServer, mock_event_store: MockEventStore) -> None:
         """Test transport integration with event store."""
         transport = StreamableHTTPServerTransport(
             mcp_session_id="test-session",

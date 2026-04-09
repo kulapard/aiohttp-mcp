@@ -2,27 +2,21 @@ import datetime
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
-from aiohttp_sse import EventSourceResponse
 
 from aiohttp_mcp import AiohttpMCP, AppBuilder
+
 
 mcp = AiohttpMCP()
 app_builder = AppBuilder(mcp=mcp, path="/mcp")
 
 
-async def handle_sse(request: web.Request) -> EventSourceResponse:
-    """Custom handler for SSE connection."""
-    # Do something before starting the SSE connection
-    response = await app_builder.sse_handler(request)
-    # Do something after closing the SSE connection
-    return response
-
-
-async def handle_message(request: web.Request) -> web.Response:
-    """Custom handler for incoming messages."""
-    # Do something before sending the message
-    response = await app_builder.message_handler(request)
-    # Do something after sending the message
+async def custom_handler(request: web.Request) -> web.StreamResponse:
+    """Custom handler that wraps the streamable HTTP handler."""
+    # Do something before processing the MCP request
+    print(f"Received {request.method} request to {request.path}")
+    response = await app_builder.streamable_http_handler(request)
+    # Do something after processing the MCP request
+    print(f"Sent response with status {response.status}")
     return response
 
 
@@ -33,10 +27,12 @@ async def get_time(timezone: str) -> str:
     return datetime.datetime.now(tz).isoformat()
 
 
-app = web.Application()
+app = app_builder.build()
 
-# Setup custom handlers
-app.router.add_get(app_builder.path, handle_sse)
-app.router.add_post(app_builder.path, handle_message)
+# Override the default route with our custom handler
+# Note: This replaces the auto-configured routes from build()
+# For more control, build the app manually:
+# app = web.Application()
+# app.router.add_route("*", "/mcp", custom_handler)
 
 web.run_app(app)

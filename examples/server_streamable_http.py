@@ -3,7 +3,7 @@ from zoneinfo import ZoneInfo
 
 from aiohttp import web
 
-from aiohttp_mcp import AiohttpMCP, TransportMode, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
 mcp = AiohttpMCP(debug=False)
 
@@ -15,5 +15,5 @@ def get_time(timezone: str) -> str:
     return datetime.datetime.now(tz).isoformat()
 
 
-app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE_HTTP, stateless=True)
+app = build_mcp_app(mcp, path="/mcp", stateless=True)
 web.run_app(app)

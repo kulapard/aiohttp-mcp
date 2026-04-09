@@ -1,0 +1,290 @@
+"""Native MCP JSON-RPC dispatch engine.
+
+Replaces mcp.server.lowlevel.Server - reads SessionMessage from a stream,
+dispatches to handlers, and writes responses back.
+"""
+
+import asyncio
+import logging
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
+from typing import Any
+
+from .context import Context, RequestContext, set_current_context
+from .messages import ServerMessageMetadata, SessionMessage
+from .models import (
+    INTERNAL_ERROR,
+    LATEST_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
+    ErrorData,
+    Implementation,
+    InitializeResult,
+    JSONRPCError,
+    JSONRPCMessage,
+    JSONRPCNotification,
+    JSONRPCRequest,
+    JSONRPCResponse,
+    PromptsCapability,
+    ResourcesCapability,
+    ServerCapabilities,
+    ToolsCapability,
+)
+from .registry import Registry
+from .streams import StreamReader, StreamWriter
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _default_lifespan(server: Any):  # type: ignore[override]
+    yield None
+
+
+class MCPServer:
+    """Native MCP protocol server with JSON-RPC dispatch.
+
+    Reads SessionMessage objects from a read stream, dispatches JSON-RPC
+    methods to registered handlers, and writes responses to a write stream.
+    """
+
+    def __init__(
+        self,
+        name: str | None = None,
+        version: str = "1.0.0",
+        instructions: str | None = None,
+        registry: Registry | None = None,
+        lifespan: Callable[..., AbstractAsyncContextManager[Any]] | None = None,
+    ) -> None:
+        self.name = name or "aiohttp-mcp"
+        self.version = version
+        self.instructions = instructions
+        self.registry = registry or Registry()
+        self._lifespan = lifespan or _default_lifespan
+
+    def create_initialization_options(self) -> dict[str, Any]:
+        """Create initialization options dict (for compatibility with transport layer)."""
+        return {
+            "server_name": self.name,
+            "server_version": self.version,
+            "instructions": self.instructions,
+        }
+
+    async def run(
+        self,
+        read_stream: StreamReader[SessionMessage | Exception],
+        write_stream: StreamWriter[SessionMessage],
+        initialization_options: dict[str, Any] | None = None,
+        raise_exceptions: bool = False,
+        stateless: bool = False,
+    ) -> None:
+        """Main dispatch loop - reads messages and dispatches to handlers."""
+        async with AsyncExitStack() as stack:
+            lifespan_context = await stack.enter_async_context(self._lifespan(self))
+
+            initialized = False
+
+            async def send_response(
+                msg: JSONRPCResponse | JSONRPCError,
+                metadata: ServerMessageMetadata | None = None,
+            ) -> None:
+                session_msg = SessionMessage(
+                    message=JSONRPCMessage(root=msg),
+                    metadata=metadata,
+                )
+                await write_stream.send(session_msg)
+
+            async def send_error(
+                request_id: str | int,
+                code: int,
+                message: str,
+                metadata: ServerMessageMetadata | None = None,
+            ) -> None:
+                await send_response(
+                    JSONRPCError(
+                        id=request_id,
+                        error=ErrorData(code=code, message=message),
+                    ),
+                    metadata=metadata,
+                )
+
+            async def handle_message(session_message: SessionMessage) -> None:
+                nonlocal initialized
+
+                message = session_message.message
+                request_context_data = None
+                if session_message.metadata and isinstance(session_message.metadata, ServerMessageMetadata):
+                    request_context_data = session_message.metadata.request_context
+
+                root = message.root
+
+                # Handle notifications (no response needed)
+                if isinstance(root, JSONRPCNotification):
+                    if root.method == "notifications/initialized":
+                        initialized = True
+                        logger.debug("Client sent initialized notification")
+                    elif root.method == "notifications/cancelled":
+                        logger.debug("Received cancellation notification")
+                    else:
+                        logger.debug("Received notification: %s", root.method)
+                    return
+
+                # Handle responses from client (rare, for server-initiated requests)
+                if isinstance(root, JSONRPCResponse | JSONRPCError):
+                    logger.debug("Received client response/error for id=%s", root.id)
+                    return
+
+                # Handle requests
+                if not isinstance(root, JSONRPCRequest):
+                    return
+
+                request_id = root.id
+                method = root.method
+                params = root.params or {}
+
+                # Build response metadata
+                response_metadata = ServerMessageMetadata(
+                    related_request_id=request_id,
+                    request_context=request_context_data,
+                )
+
+                try:
+                    if method == "initialize":
+                        result = await self._handle_initialize(params)
+                        await send_response(
+                            JSONRPCResponse(id=request_id, result=result),
+                            metadata=response_metadata,
+                        )
+                        return
+
+                    if method == "ping":
+                        await send_response(
+                            JSONRPCResponse(id=request_id, result={}),
+                            metadata=response_metadata,
+                        )
+                        return
+
+                    # Set context for tool/resource/prompt calls
+                    ctx = Context(
+                        RequestContext(
+                            request_id=request_id,
+                            lifespan_context=lifespan_context,
+                            request=request_context_data,
+                        )
+                    )
+                    token = set_current_context(ctx)
+
+                    try:
+                        result = await self._dispatch(method, params)
+                        await send_response(
+                            JSONRPCResponse(id=request_id, result=result),
+                            metadata=response_metadata,
+                        )
+                    finally:
+                        set_current_context(None)
+
+                except Exception as e:
+                    logger.exception("Error handling request %s: %s", method, e)
+                    if raise_exceptions:
+                        raise
+                    await send_error(
+                        request_id,
+                        INTERNAL_ERROR,
+                        str(e),
+                        metadata=response_metadata,
+                    )
+
+            # Main message loop
+            async with asyncio.TaskGroup() as tg:
+                async for message in read_stream:
+                    if isinstance(message, Exception):
+                        logger.error("Received exception from stream: %s", message)
+                        if raise_exceptions:
+                            raise message
+                        continue
+
+                    tg.create_task(handle_message(message))
+
+    async def _handle_initialize(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Handle the initialize request."""
+        client_version = params.get("protocolVersion", LATEST_PROTOCOL_VERSION)
+
+        # Negotiate version: use client's version if supported, else our latest
+        if client_version in SUPPORTED_PROTOCOL_VERSIONS:
+            negotiated_version = client_version
+        else:
+            negotiated_version = LATEST_PROTOCOL_VERSION
+
+        capabilities = ServerCapabilities(
+            prompts=PromptsCapability(listChanged=True),
+            resources=ResourcesCapability(subscribe=False, listChanged=True),
+            tools=ToolsCapability(listChanged=True),
+        )
+
+        server_info = Implementation(
+            name=self.name,
+            version=self.version,
+        )
+
+        result = InitializeResult(
+            protocolVersion=negotiated_version,
+            capabilities=capabilities,
+            serverInfo=server_info,
+            instructions=self.instructions,
+        )
+
+        return result.model_dump(by_alias=True, exclude_none=True)
+
+    async def _dispatch(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Dispatch a JSON-RPC method to the appropriate handler."""
+        if method == "tools/list":
+            tools = await self.registry.list_tools()
+            return {"tools": [t.model_dump(by_alias=True, exclude_none=True) for t in tools]}
+
+        elif method == "tools/call":
+            name = params.get("name", "")
+            arguments = params.get("arguments", {})
+            try:
+                content = await self.registry.call_tool(name, arguments)
+                return {
+                    "content": [c.model_dump(by_alias=True, exclude_none=True) for c in content],
+                    "isError": False,
+                }
+            except Exception as e:
+                return {
+                    "content": [{"type": "text", "text": str(e)}],
+                    "isError": True,
+                }
+
+        elif method == "resources/list":
+            resources = await self.registry.list_resources()
+            return {"resources": [r.model_dump(by_alias=True, exclude_none=True) for r in resources]}
+
+        elif method == "resources/read":
+            uri = params.get("uri", "")
+            contents = await self.registry.read_resource(uri)
+            return {
+                "contents": [c.model_dump(by_alias=True, exclude_none=True) for c in contents],
+            }
+
+        elif method == "resources/templates/list":
+            templates = await self.registry.list_resource_templates()
+            return {"resourceTemplates": [t.model_dump(by_alias=True, exclude_none=True) for t in templates]}
+
+        elif method == "prompts/list":
+            prompts = await self.registry.list_prompts()
+            return {"prompts": [p.model_dump(by_alias=True, exclude_none=True) for p in prompts]}
+
+        elif method == "prompts/get":
+            name = params.get("name", "")
+            arguments = params.get("arguments")
+            result = await self.registry.get_prompt(name, arguments)
+            return result.model_dump(by_alias=True, exclude_none=True)
+
+        else:
+            raise _MethodNotFoundError(f"Method not found: {method}")
+
+
+class _MethodNotFoundError(Exception):
+    """Internal error for unknown methods."""
+
+    pass

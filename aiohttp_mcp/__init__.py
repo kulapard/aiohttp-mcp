@@ -1,4 +1,4 @@
-from .app import AppBuilder, TransportMode, build_mcp_app, setup_mcp_subapp
+from .app import AppBuilder, build_mcp_app, setup_mcp_subapp
 from .core import AiohttpMCP
 from .types import (
     Annotations,
@@ -22,7 +22,6 @@ __all__ = [
     "Resource",
     "Tool",
     "ToolAnnotations",
-    "TransportMode",
     "build_mcp_app",
     "setup_mcp_subapp",
 ]

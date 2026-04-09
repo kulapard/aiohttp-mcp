@@ -1,27 +1,27 @@
-"""Type definitions and re-exports from MCP library."""
+"""Type definitions and re-exports for aiohttp-mcp.
+
+All types now come from the native protocol implementation
+instead of the mcp package.
+"""
 
 # aiohttp-sse types
 from aiohttp_sse import EventSourceResponse
 
-# MCP Server types
-from mcp.server.fastmcp import Context, FastMCP
-from mcp.server.fastmcp.prompts.base import Prompt as FastMCPPrompt
-from mcp.server.fastmcp.resources.base import Resource as FastMCPResource
-from mcp.server.lowlevel import Server
-from mcp.server.lowlevel.helper_types import ReadResourceContents
-from mcp.server.lowlevel.server import LifespanResultT
-from mcp.server.streamable_http import EventMessage, EventStore
+# Protocol context
+from .protocol.context import Context
 
-# MCP shared types
-from mcp.shared.message import ServerMessageMetadata, SessionMessage
-from mcp.shared.version import SUPPORTED_PROTOCOL_VERSIONS
+# Protocol messages
+from .protocol.messages import EventMessage, EventStore, ServerMessageMetadata, SessionMessage
 
-# MCP protocol types
-from mcp.types import (
+# Protocol models
+# Re-export from models
+from .protocol.models import (
     INTERNAL_ERROR,
     INVALID_PARAMS,
     INVALID_REQUEST,
+    LATEST_PROTOCOL_VERSION,
     PARSE_ERROR,
+    SUPPORTED_PROTOCOL_VERSIONS,
     Annotations,
     AnyFunction,
     Content,
@@ -33,6 +33,7 @@ from mcp.types import (
     JSONRPCRequest,
     JSONRPCResponse,
     Prompt,
+    ReadResourceContents,
     RequestId,
     Resource,
     ResourceTemplate,
@@ -42,10 +43,17 @@ from mcp.types import (
     ToolAnnotations,
 )
 
+# Protocol registry
+from .protocol.registry import ToolError
+
+# Protocol server
+from .protocol.server import MCPServer
+
 __all__ = [
     "INTERNAL_ERROR",
     "INVALID_PARAMS",
     "INVALID_REQUEST",
+    "LATEST_PROTOCOL_VERSION",
     "PARSE_ERROR",
     "SUPPORTED_PROTOCOL_VERSIONS",
     "Annotations",
@@ -56,26 +64,23 @@ __all__ = [
     "EventMessage",
     "EventSourceResponse",
     "EventStore",
-    "FastMCP",
-    "FastMCPPrompt",
-    "FastMCPResource",
     "GetPromptResult",
     "Icon",
     "JSONRPCError",
     "JSONRPCMessage",
     "JSONRPCRequest",
     "JSONRPCResponse",
-    "LifespanResultT",
+    "MCPServer",
     "Prompt",
     "ReadResourceContents",
     "RequestId",
     "Resource",
     "ResourceTemplate",
-    "Server",
     "ServerMessageMetadata",
     "SessionMessage",
     "TextContent",
     "TextResourceContents",
     "Tool",
     "ToolAnnotations",
+    "ToolError",
 ]

@@ -46,20 +46,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from aiohttp import HttpVersion
-from mcp.types import JSONRPCMessage, JSONRPCNotification
 
+from aiohttp_mcp.protocol.models import JSONRPCMessage, JSONRPCNotification
 from aiohttp_mcp.streamable_http import (
     CONTENT_TYPE_JSON,
     MAXIMUM_MESSAGE_SIZE,
     MCP_PROTOCOL_VERSION_HEADER,
     MCP_SESSION_ID_HEADER,
+    EventType,
     StreamableHTTPServerTransport,
 )
-from aiohttp_mcp.transport import EventType
 from aiohttp_mcp.types import EventMessage
-
-# Set the pytest marker for async tests/fixtures
-pytestmark = pytest.mark.anyio
 
 
 def create_mock_request(
