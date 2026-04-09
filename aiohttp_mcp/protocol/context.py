@@ -6,9 +6,10 @@ available in FastMCP's Context.
 """
 
 import contextvars
+import inspect
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar, get_args, get_origin
 
 ServerT = TypeVar("ServerT")
 LifespanT = TypeVar("LifespanT")
@@ -159,3 +160,31 @@ def get_current_context() -> Context[Any, Any]:
 def set_current_context(ctx: Context[Any, Any] | None) -> contextvars.Token[Context[Any, Any] | None]:
     """Set the current MCP context."""
     return _current_context.set(ctx)
+
+
+def find_context_kwarg(fn: Callable[..., Any]) -> str | None:
+    """Find the parameter name typed as Context in a function signature.
+
+    Returns the parameter name if found, or None.
+    """
+    try:
+        sig = inspect.signature(fn, eval_str=True)
+    except (ValueError, TypeError):
+        return None
+
+    for param in sig.parameters.values():
+        annotation = param.annotation
+        if annotation is inspect.Parameter.empty:
+            continue
+        if annotation is Context:
+            return param.name
+        origin = get_origin(annotation)
+        if origin is Context:
+            return param.name
+        # Check get_args for Annotated types etc.
+        args = get_args(annotation)
+        if args:
+            for arg in args:
+                if arg is Context or get_origin(arg) is Context:
+                    return param.name
+    return None

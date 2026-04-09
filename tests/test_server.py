@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from aiohttp_mcp.protocol.context import get_current_context
+from aiohttp_mcp.protocol.context import Context
 from aiohttp_mcp.protocol.messages import SessionMessage
 from aiohttp_mcp.protocol.models import (
     LATEST_PROTOCOL_VERSION,
@@ -70,9 +70,8 @@ def registry() -> Registry:
         """A tool that always fails."""
         raise ValueError("Something went wrong")
 
-    async def context_tool() -> str:
+    async def context_tool(ctx: Context[Any, Any]) -> str:
         """A tool that reads context."""
-        ctx = get_current_context()
         return f"request_id={ctx.request_id}"
 
     reg.register_tool(echo_tool)
@@ -297,8 +296,7 @@ class TestContextNotifications:
         """Tools using ctx.info() should produce notifications on the write stream."""
         registry = server.registry
 
-        async def logging_tool() -> str:
-            ctx = get_current_context()
+        async def logging_tool(ctx: Context[Any, Any]) -> str:
             await ctx.info("Processing request")
             return "done"
 

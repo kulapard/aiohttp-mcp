@@ -1,6 +1,7 @@
 """Tool, Resource, and Prompt registries for MCP server.
 
 Manages registration, listing, and execution of MCP primitives.
+Replaces FastMCP's internal tool/resource/prompt management.
 """
 
 import inspect
@@ -13,6 +14,7 @@ from typing import Any
 
 from pydantic import AnyUrl
 
+from .context import Context, RequestContext, find_context_kwarg, get_current_context
 from .func_metadata import FuncMetadata, func_metadata
 from .models import (
     Annotations,
@@ -54,6 +56,7 @@ class ToolDef:
     description: str
     fn_metadata: FuncMetadata
     is_async: bool
+    context_kwarg: str | None
     annotations: ToolAnnotations | None = None
     icons: list[Icon] | None = None
     meta: dict[str, Any] | None = None
@@ -70,6 +73,7 @@ class ResourceDef:
     mime_type: str | None
     is_template: bool
     is_async: bool
+    context_kwarg: str | None
     icons: list[Icon] | None = None
     annotations: Annotations | None = None
     uri_params: list[str] = field(default_factory=list)
@@ -82,6 +86,7 @@ class PromptDef:
     title: str | None
     description: str | None
     is_async: bool
+    context_kwarg: str | None
     icons: list[Icon] | None = None
 
 
@@ -159,7 +164,10 @@ class Registry:
         if tool_name in self._tools and self._warn_on_duplicate_tools:
             logger.warning("Tool '%s' is already registered, overwriting", tool_name)
 
-        meta_obj = func_metadata(fn)
+        ctx_kwarg = find_context_kwarg(fn)
+        skip_names = (ctx_kwarg,) if ctx_kwarg else ()
+
+        meta_obj = func_metadata(fn, skip_names=skip_names)
         is_async = inspect.iscoroutinefunction(fn)
 
         self._tools[tool_name] = ToolDef(
@@ -169,6 +177,7 @@ class Registry:
             description=tool_description,
             fn_metadata=meta_obj,
             is_async=is_async,
+            context_kwarg=ctx_kwarg,
             annotations=annotations,
             icons=icons,
             meta=meta,
@@ -201,12 +210,20 @@ class Registry:
         if td is None:
             raise ToolError(f"Unknown tool: {name}")
 
+        extra_args: dict[str, Any] | None = None
+        if td.context_kwarg:
+            try:
+                ctx = get_current_context()
+            except ValueError:
+                ctx = Context(request_context=RequestContext())
+            extra_args = {td.context_kwarg: ctx}
+
         try:
             result = await td.fn_metadata.call_fn_with_arg_validation(
                 fn=td.fn,
                 fn_is_async=td.is_async,
                 arguments_to_validate=arguments,
-                arguments_to_pass_directly=None,
+                arguments_to_pass_directly=extra_args,
             )
         except ToolError:
             raise
@@ -235,6 +252,7 @@ class Registry:
         if uri in self._resources and self._warn_on_duplicate_resources:
             logger.warning("Resource '%s' is already registered, overwriting", uri)
 
+        ctx_kwarg = find_context_kwarg(fn)
         is_async = inspect.iscoroutinefunction(fn)
 
         self._resources[uri] = ResourceDef(
@@ -246,6 +264,7 @@ class Registry:
             mime_type=mime_type,
             is_template=is_template,
             is_async=is_async,
+            context_kwarg=ctx_kwarg,
             icons=icons,
             annotations=annotations,
             uri_params=uri_params,
@@ -303,10 +322,17 @@ class Registry:
         raise ValueError(f"Unknown resource: {uri_str}")
 
     async def _call_resource(self, rd: ResourceDef, params: dict[str, str]) -> Iterable[TextResourceContents]:
+        kwargs: dict[str, Any] = dict(params)
+        if rd.context_kwarg:
+            try:
+                kwargs[rd.context_kwarg] = get_current_context()
+            except ValueError:
+                kwargs[rd.context_kwarg] = Context(request_context=RequestContext())
+
         if rd.is_async:
-            result = await rd.fn(**params)
+            result = await rd.fn(**kwargs)
         else:
-            result = rd.fn(**params)
+            result = rd.fn(**kwargs)
 
         content = str(result)
         return [
@@ -331,6 +357,7 @@ class Registry:
         if prompt_name in self._prompts and self._warn_on_duplicate_prompts:
             logger.warning("Prompt '%s' is already registered, overwriting", prompt_name)
 
+        ctx_kwarg = find_context_kwarg(fn)
         is_async = inspect.iscoroutinefunction(fn)
 
         self._prompts[prompt_name] = PromptDef(
@@ -339,15 +366,19 @@ class Registry:
             title=title,
             description=description or fn.__doc__ or "",
             is_async=is_async,
+            context_kwarg=ctx_kwarg,
             icons=icons,
         )
 
     async def list_prompts(self) -> list[Prompt]:
         prompts: list[Prompt] = []
         for pd in self._prompts.values():
+            # Extract arguments from function signature
             sig = inspect.signature(pd.fn)
             args: list[PromptArgument] = []
             for param in sig.parameters.values():
+                if pd.context_kwarg and param.name == pd.context_kwarg:
+                    continue
                 args.append(
                     PromptArgument(
                         name=param.name,
@@ -372,6 +403,11 @@ class Registry:
             raise ValueError(f"Unknown prompt: {name}")
 
         kwargs = dict(arguments or {})
+        if pd.context_kwarg:
+            try:
+                kwargs[pd.context_kwarg] = get_current_context()
+            except ValueError:
+                kwargs[pd.context_kwarg] = Context(request_context=RequestContext())
 
         if pd.is_async:
             result = await pd.fn(**kwargs)
@@ -399,6 +435,7 @@ class Registry:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 _CONTENT_TYPES = (TextContent, ImageContent, AudioContent, EmbeddedResource, ResourceLink)
 
