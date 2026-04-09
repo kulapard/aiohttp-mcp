@@ -8,7 +8,7 @@ instead of the mcp package.
 from aiohttp_sse import EventSourceResponse
 
 # Protocol context
-from .protocol.context import Context
+from .protocol.context import Context, get_current_context
 
 # Protocol messages
 from .protocol.messages import EventMessage, EventStore, ServerMessageMetadata, SessionMessage
@@ -60,6 +60,7 @@ __all__ = [
     "AnyFunction",
     "Content",
     "Context",
+    "get_current_context",
     "ErrorData",
     "EventMessage",
     "EventSourceResponse",

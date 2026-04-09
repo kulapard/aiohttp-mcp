@@ -9,6 +9,7 @@ from .types import (
     Resource,
     Tool,
     ToolAnnotations,
+    get_current_context,
 )
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "Tool",
     "ToolAnnotations",
     "build_mcp_app",
+    "get_current_context",
     "setup_mcp_subapp",
 ]

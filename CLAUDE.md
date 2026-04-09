@@ -67,6 +67,61 @@ app = build_mcp_app(mcp, path="/mcp", stateless=True)
 app = build_mcp_app(mcp, path="/mcp", json_response=True)
 ```
 
+## Context Access
+
+There are 3 ways to access the MCP request context inside tools:
+
+### 1. Module function (recommended)
+
+Call `get_current_context()` — no extra parameters needed on the tool function:
+
+```python
+from aiohttp_mcp import get_current_context
+
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = get_current_context()
+    user = ctx.request_context.request.headers.get("X-User-ID")
+    await ctx.info(f"Query from {user}: {query}")
+    return f"Result for {user}"
+```
+
+### 2. Instance method
+
+Call `mcp.get_context()` on the AiohttpMCP instance (requires access to `mcp`):
+
+```python
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = mcp.get_context()
+    user = ctx.request_context.request.headers.get("X-User-ID")
+    return f"Result for {user}"
+```
+
+### 3. Explicit parameter
+
+Declare `ctx: Context` as a parameter — it's auto-injected and excluded from the tool's input schema:
+
+```python
+from aiohttp_mcp import Context
+
+@mcp.tool()
+async def my_tool(query: str, ctx: Context) -> str:
+    user = ctx.request_context.request.headers.get("X-User-ID")
+    return f"Result for {user}"
+```
+
+### Context capabilities
+
+All approaches give access to the same `Context` object:
+
+- `ctx.request_id` — JSON-RPC request ID
+- `ctx.request_context.request` — aiohttp `Request` (headers, cookies, IP)
+- `ctx.request_context.lifespan_context` — shared resources from lifespan
+- `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
+- `await ctx.report_progress(progress, total)` — report progress to client
+- `await ctx.read_resource(uri)` — read a registered resource
+
 ## Context Patterns
 
 ### Lifespan Context (Shared Resources)

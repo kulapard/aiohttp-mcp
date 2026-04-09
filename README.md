@@ -126,13 +126,13 @@ web.run_app(app)
 
 ### Context Access
 
-Tools can access HTTP request data (headers, cookies, client IP) and shared resources via the `Context` parameter:
+Tools can access HTTP request data and shared resources via `get_current_context()` — no extra parameters needed:
 
 ```python
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
-from aiohttp_mcp import AiohttpMCP, Context
+from aiohttp_mcp import AiohttpMCP, get_current_context
 
 
 @dataclass
@@ -153,17 +153,23 @@ mcp = AiohttpMCP(lifespan=app_lifespan)
 
 
 @mcp.tool()
-async def secure_query(sql: str, ctx: Context) -> str:
+async def secure_query(sql: str) -> str:
     """Run a database query with auth validation."""
-    # Access HTTP request
-    request = ctx.request_context.request
-    user_id = request.headers.get("X-User-ID", "anonymous")
+    ctx = get_current_context()
+
+    # Access HTTP request (headers, cookies, client IP)
+    user_id = ctx.request_context.request.headers.get("X-User-ID", "anonymous")
 
     # Access shared resources from lifespan
     db_pool = ctx.request_context.lifespan_context.db_pool
 
+    # Send log to client
+    await ctx.info(f"Query by {user_id}")
+
     return f"Query by {user_id}: {sql}"
 ```
+
+You can also use `ctx: Context` as an explicit parameter (auto-injected) or `mcp.get_context()`. See [CLAUDE.md](CLAUDE.md#context-access) for all options.
 
 ### Client Example
 
