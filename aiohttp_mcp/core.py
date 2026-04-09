@@ -11,7 +11,6 @@ from .protocol.context import get_current_context as _get_current_context
 from .protocol.messages import EventStore
 from .protocol.models import (
     Annotations,
-    AnyFunction,
     Content,
     GetPromptResult,
     Icon,
@@ -24,6 +23,7 @@ from .protocol.models import (
 )
 from .protocol.registry import Registry, ToolError
 from .protocol.server import MCPServer
+from .protocol.typedefs import AnyFunction
 
 logger = logging.getLogger(__name__)
 

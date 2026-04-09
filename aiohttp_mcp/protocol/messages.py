@@ -8,7 +8,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from .models import JSONRPCMessage, RequestId
+from .models import JSONRPCMessage
+from .typedefs import RequestId
 
 
 @dataclass

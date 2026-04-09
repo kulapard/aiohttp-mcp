@@ -9,19 +9,17 @@ from __future__ import annotations
 
 import contextvars
 import inspect
-from collections.abc import Awaitable, Callable, Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, get_args, get_origin
 
 if TYPE_CHECKING:
     from aiohttp.web import Request
 
+from .typedefs import NotificationSender, ResourceReader
+
 ServerT = TypeVar("ServerT")
 LifespanT = TypeVar("LifespanT")
-
-# Type alias for the notification sender callback
-NotificationSender = Callable[[str, dict[str, Any] | None], Awaitable[None]]
-ResourceReader = Callable[[str], Awaitable[Iterable[Any]]]
 
 
 @dataclass

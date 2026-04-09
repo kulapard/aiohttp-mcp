@@ -4,10 +4,11 @@ Defines all JSON-RPC and MCP entity types needed for the protocol,
 replacing imports from the `mcp` package.
 """
 
-from collections.abc import Callable
 from typing import Annotated, Any, Literal
 
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel, StrictInt
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
+
+from .typedefs import RequestId
 
 # ---------------------------------------------------------------------------
 # JSON-RPC 2.0 error codes
@@ -17,12 +18,6 @@ INVALID_REQUEST: int = -32600
 METHOD_NOT_FOUND: int = -32601
 INVALID_PARAMS: int = -32602
 INTERNAL_ERROR: int = -32603
-
-# ---------------------------------------------------------------------------
-# Type aliases
-# ---------------------------------------------------------------------------
-RequestId = StrictInt | str
-AnyFunction = Callable[..., Any]
 
 
 # ---------------------------------------------------------------------------

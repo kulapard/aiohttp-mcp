@@ -31,9 +31,9 @@ from .protocol.models import (
     JSONRPCMessage,
     JSONRPCRequest,
     JSONRPCResponse,
-    RequestId,
 )
 from .protocol.streams import ClosedStreamError, StreamReader, StreamWriter, create_memory_stream
+from .protocol.typedefs import RequestId
 
 logger = logging.getLogger(__name__)
 
