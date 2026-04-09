@@ -80,7 +80,6 @@ strict = true
 
 [tool.ty.src]
 exclude = ["tests/"]
-#exclude = ["tests/", "examples/"]
 
 [tool.ruff]
 line-length = 120

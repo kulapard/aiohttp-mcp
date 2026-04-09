@@ -56,6 +56,23 @@ class Context(Generic[ServerT, LifespanT]):
         """The JSON-RPC request ID for the current call."""
         return self._request_context.request_id
 
+    @property
+    def app(self) -> Any:
+        """The aiohttp Application instance for the current request.
+
+        Use this to access shared state stored on the app::
+
+            @mcp.tool()
+            async def my_tool(query: str) -> str:
+                ctx = get_current_context()
+                db_pool = ctx.app["db_pool"]
+                ...
+        """
+        request = self._request_context.request
+        if request is None:
+            raise RuntimeError("No HTTP request context available — app is not accessible outside of an HTTP request")
+        return request.app
+
     # -- Logging methods (send notifications/message to client) --
 
     async def log(
