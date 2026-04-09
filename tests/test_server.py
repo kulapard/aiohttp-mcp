@@ -25,6 +25,43 @@ from aiohttp_mcp.protocol.server import MCPServer
 from aiohttp_mcp.protocol.streams import create_memory_stream
 
 
+async def _run_request_with_notifications(
+    server: MCPServer, request: JSONRPCRequest
+) -> tuple[dict[str, Any], list[JSONRPCNotification]]:
+    """Helper: send a request and return (response_result, notifications)."""
+    read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+    write_writer, write_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+
+    msg = SessionMessage(message=JSONRPCMessage(root=request))
+    await read_writer.send(msg)
+    await read_writer.aclose()
+
+    server_task = asyncio.create_task(server.run(read_reader, write_writer))
+
+    result: dict[str, Any] = {}
+    notifications: list[JSONRPCNotification] = []
+    try:
+        async with asyncio.timeout(5.0):
+            async for session_msg in write_reader:
+                root = session_msg.message.root
+                if isinstance(root, JSONRPCNotification):
+                    notifications.append(root)
+                elif isinstance(root, JSONRPCResponse):
+                    result = root.result
+                    break
+                elif isinstance(root, JSONRPCError):
+                    result = {"_error": root.error.model_dump()}
+                    break
+    finally:
+        server_task.cancel()
+        try:
+            await server_task
+        except asyncio.CancelledError:
+            pass
+
+    return result, notifications
+
+
 async def _run_request(server: MCPServer, request: JSONRPCRequest) -> dict[str, Any]:
     """Helper: send a single request through the server and return the response result."""
     read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
@@ -341,3 +378,85 @@ class TestContextNotifications:
         assert notifications[0].params is not None
         assert notifications[0].params["level"] == "info"
         assert notifications[0].params["data"] == "Processing request"
+
+    @pytest.mark.parametrize("level", ["debug", "info", "warning", "error"])
+    async def test_all_log_levels(self, server: MCPServer, level: str) -> None:
+        """Each log level helper sends the correct level."""
+        registry = server.registry
+
+        async def level_tool(ctx: Context) -> str:
+            method = getattr(ctx, level)
+            await method(f"{level} message")
+            return "ok"
+
+        registry.register_tool(level_tool, name=f"{level}_tool")
+
+        result, notifications = await _run_request_with_notifications(
+            server,
+            JSONRPCRequest(id=1, method="tools/call", params={"name": f"{level}_tool", "arguments": {}}),
+        )
+        assert result.get("isError") is False
+        assert len(notifications) == 1
+        assert notifications[0].params is not None
+        assert notifications[0].params["level"] == level
+        assert notifications[0].params["data"] == f"{level} message"
+
+    async def test_log_with_logger_name(self, server: MCPServer) -> None:
+        """ctx.log() with logger_name includes it in the notification."""
+        registry = server.registry
+
+        async def named_logger_tool(ctx: Context) -> str:
+            await ctx.log("info", "hello", logger_name="my.logger")
+            return "ok"
+
+        registry.register_tool(named_logger_tool)
+
+        _, notifications = await _run_request_with_notifications(
+            server,
+            JSONRPCRequest(id=1, method="tools/call", params={"name": "named_logger_tool", "arguments": {}}),
+        )
+        assert len(notifications) == 1
+        assert notifications[0].params is not None
+        assert notifications[0].params["logger"] == "my.logger"
+
+    async def test_report_progress(self, server: MCPServer) -> None:
+        """ctx.report_progress() sends notifications/progress."""
+        registry = server.registry
+
+        async def progress_tool(ctx: Context) -> str:
+            await ctx.report_progress(50, total=100, message="Halfway")
+            return "ok"
+
+        registry.register_tool(progress_tool)
+
+        _, notifications = await _run_request_with_notifications(
+            server,
+            JSONRPCRequest(id=1, method="tools/call", params={"name": "progress_tool", "arguments": {}}),
+        )
+        assert len(notifications) == 1
+        assert notifications[0].method == "notifications/progress"
+        assert notifications[0].params is not None
+        assert notifications[0].params["progress"] == 50
+        assert notifications[0].params["total"] == 100
+        assert notifications[0].params["message"] == "Halfway"
+        assert notifications[0].params["progressToken"] == 1  # request_id
+
+    async def test_report_progress_minimal(self, server: MCPServer) -> None:
+        """ctx.report_progress() with only progress value."""
+        registry = server.registry
+
+        async def minimal_progress_tool(ctx: Context) -> str:
+            await ctx.report_progress(75)
+            return "ok"
+
+        registry.register_tool(minimal_progress_tool)
+
+        _, notifications = await _run_request_with_notifications(
+            server,
+            JSONRPCRequest(id=1, method="tools/call", params={"name": "minimal_progress_tool", "arguments": {}}),
+        )
+        assert len(notifications) == 1
+        assert notifications[0].params is not None
+        assert notifications[0].params["progress"] == 75
+        assert "total" not in notifications[0].params
+        assert "message" not in notifications[0].params
