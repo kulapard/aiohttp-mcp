@@ -266,13 +266,16 @@ class MCPServer:
         elif method == "tools/call":
             name = params.get("name", "")
             arguments = params.get("arguments", {})
+            from .registry import ToolError
+
             try:
                 content = await self.registry.call_tool(name, arguments)
                 return {
                     "content": [dump_for_version(c, version) for c in content],
                     "isError": False,
                 }
-            except Exception as e:
+            except ToolError as e:
+                logger.warning("Tool '%s' execution error: %s", name, e)
                 return {
                     "content": [{"type": "text", "text": str(e)}],
                     "isError": True,
