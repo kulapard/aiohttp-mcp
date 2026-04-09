@@ -11,6 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Clean artifacts**: `make clean`
 - **Install dependencies**: `uv sync --all-extras`
 
+**Before every commit**, run `make lint` to ensure code passes ruff and mypy strict checks. Do not commit code that fails linting.
+
 ## Architecture Overview
 
 This is a Python library (requires Python 3.11+) that provides Model Context Protocol (MCP) server functionality built on top of aiohttp. It implements the MCP protocol natively without depending on the `mcp` SDK at runtime.
