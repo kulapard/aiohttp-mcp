@@ -5,8 +5,6 @@ logging, progress reporting, and resource reading — matching the features
 available in FastMCP's Context.
 """
 
-from __future__ import annotations
-
 import contextvars
 import inspect
 from collections.abc import Callable, Iterable
