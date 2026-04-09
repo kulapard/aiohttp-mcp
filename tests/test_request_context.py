@@ -19,6 +19,7 @@ from aiohttp_mcp.protocol.models import TextContent
 
 logger = logging.getLogger(__name__)
 
+
 # Test fixtures for lifespan context
 @dataclass
 class AppContextForTest:
