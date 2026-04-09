@@ -78,6 +78,12 @@ only-packages = true
 [tool.mypy]
 strict = true
 
+[tool.ty.src]
+exclude = ["tests/", "examples/"]
+
+[tool.ty.rules]
+unresolved-attribute = "warn"
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"

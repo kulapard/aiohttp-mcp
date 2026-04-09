@@ -11,7 +11,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, create_model
 from pydantic.fields import FieldInfo
-from pydantic.json_schema import GenerateJsonSchema
+from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 
 
 class InvalidSignature(Exception):
@@ -21,8 +21,8 @@ class InvalidSignature(Exception):
 class _CleanSchemaGenerator(GenerateJsonSchema):
     """JSON Schema generator that omits the root 'title' added by pydantic."""
 
-    def generate(self, schema: Any, mode: str = "validation") -> dict[str, Any]:
-        json_schema = super().generate(schema, mode=mode)  # type: ignore[arg-type]
+    def generate(self, schema: Any, mode: JsonSchemaMode = "validation") -> dict[str, Any]:
+        json_schema = super().generate(schema, mode=mode)
         json_schema.pop("title", None)
         json_schema.pop("description", None)
         return json_schema

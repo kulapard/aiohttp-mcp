@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 - **Run tests**: `uv run pytest` (with coverage reporting configured)
-- **Lint code**: `make lint` (runs pre-commit hooks and mypy)
+- **Lint code**: `make lint` (runs pre-commit hooks, mypy, and ty)
 - **Type checking**: `uv run mypy .`
 - **Build package**: `uv build`
 - **Clean artifacts**: `make clean`

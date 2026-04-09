@@ -5,7 +5,7 @@ for bidirectional in-process communication.
 """
 
 import asyncio
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 
 T = TypeVar("T")
 
@@ -39,7 +39,7 @@ class StreamWriter(Generic[T]):
                 # Use a timeout to avoid deadlocks during cleanup.
                 async with asyncio.timeout(1.0):
                     await self._queue.put(_CLOSED)
-            except (TimeoutError, asyncio.QueueShutDown):
+            except (TimeoutError, Exception):
                 pass
 
 
@@ -59,7 +59,7 @@ class StreamReader(Generic[T]):
         if item is _CLOSED:
             self._closed = True
             raise ClosedStreamError("Stream was closed by writer")
-        return item  # type: ignore[return-value]
+        return cast(T, item)
 
     async def aclose(self) -> None:
         self._closed = True

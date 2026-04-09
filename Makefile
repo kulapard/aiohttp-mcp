@@ -64,10 +64,13 @@ cov-dev:
 	@open -n "file://`pwd`/htmlcov/index.html"
 
 # Run linting
-lint: pre-commit mypy
+lint: pre-commit mypy ty
 
 mypy:
 	uv run mypy .
+
+ty:
+	ty check
 
 pre-commit:
 	uv run pre-commit run --all-files
