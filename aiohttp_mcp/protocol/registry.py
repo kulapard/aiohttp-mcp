@@ -18,13 +18,17 @@ from .context import Context, RequestContext, find_context_kwarg, get_current_co
 from .func_metadata import FuncMetadata, func_metadata
 from .models import (
     Annotations,
+    AudioContent,
     Content,
+    EmbeddedResource,
     GetPromptResult,
     Icon,
+    ImageContent,
     Prompt,
     PromptArgument,
     PromptMessage,
     Resource,
+    ResourceLink,
     ResourceTemplate,
     TextContent,
     TextResourceContents,
@@ -436,13 +440,14 @@ class Registry:
 # ---------------------------------------------------------------------------
 
 
+_CONTENT_TYPES = (TextContent, ImageContent, AudioContent, EmbeddedResource, ResourceLink)
+
+
 def _convert_to_content(result: Any) -> list[Content]:
     """Convert a tool function result to a list of Content blocks."""
     if isinstance(result, list):
-        # Check if it's already a list of Content
-        if result and isinstance(result[0], TextContent):
+        if result and isinstance(result[0], _CONTENT_TYPES):
             return result
-        # Convert each item
         return [_single_to_content(item) for item in result]
 
     return [_single_to_content(result)]
@@ -450,9 +455,8 @@ def _convert_to_content(result: Any) -> list[Content]:
 
 def _single_to_content(item: Any) -> Content:
     """Convert a single value to a Content block."""
-    if isinstance(item, TextContent):
+    if isinstance(item, _CONTENT_TYPES):
         return item
-    # Default: convert to text
     if isinstance(item, str):
         return TextContent(text=item)
     if isinstance(item, dict):
