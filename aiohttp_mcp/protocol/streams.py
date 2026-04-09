@@ -14,10 +14,6 @@ class ClosedStreamError(Exception):
     """Raised when attempting to use a closed stream."""
 
 
-class BrokenStreamError(Exception):
-    """Raised when a stream's peer has been closed."""
-
-
 _CLOSED = object()
 
 
@@ -38,10 +34,16 @@ class StreamWriter(Generic[T]):
     async def aclose(self) -> None:
         if not self._closed:
             self._closed = True
-            try:
-                self._queue.put_nowait(_CLOSED)
-            except asyncio.QueueFull:
-                pass
+            # Drain one item to make room for the sentinel if the queue is full
+            while True:
+                try:
+                    self._queue.put_nowait(_CLOSED)
+                    break
+                except asyncio.QueueFull:
+                    try:
+                        self._queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
 
 
 class StreamReader(Generic[T]):

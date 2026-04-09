@@ -33,7 +33,7 @@ from .protocol.models import (
     JSONRPCResponse,
     RequestId,
 )
-from .protocol.streams import BrokenStreamError, ClosedStreamError, StreamReader, StreamWriter, create_memory_stream
+from .protocol.streams import ClosedStreamError, StreamReader, StreamWriter, create_memory_stream
 
 logger = logging.getLogger(__name__)
 
@@ -621,7 +621,7 @@ class StreamableHTTPServerTransport:
                                 await self._request_streams[request_stream_id][0].send(
                                     EventMessage(message, event_id)
                                 )
-                            except (BrokenStreamError, ClosedStreamError):
+                            except ClosedStreamError:
                                 self._request_streams.pop(request_stream_id, None)
                         else:
                             logging.debug(
