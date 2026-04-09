@@ -5,11 +5,16 @@ logging, progress reporting, and resource reading — matching the features
 available in FastMCP's Context.
 """
 
+from __future__ import annotations
+
 import contextvars
 import inspect
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Generic, Literal, TypeVar, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, get_args, get_origin
+
+if TYPE_CHECKING:
+    from aiohttp.web import Request
 
 ServerT = TypeVar("ServerT")
 LifespanT = TypeVar("LifespanT")
@@ -25,7 +30,7 @@ class RequestContext(Generic[ServerT, LifespanT]):
 
     request_id: str | int | None = None
     lifespan_context: LifespanT | None = None
-    request: Any = None  # aiohttp.web.Request
+    request: Request | None = None
     session: Any = None
     _send_notification: NotificationSender | None = field(default=None, repr=False)
     _read_resource: ResourceReader | None = field(default=None, repr=False)
