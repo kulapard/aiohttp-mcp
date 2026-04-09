@@ -7,7 +7,7 @@ are used internally; these are used only for serialization to older clients.
 
 from typing import Any
 
-from pydantic import AnyUrl, BaseModel, ConfigDict
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field
 
 from .models import (
     LATEST_PROTOCOL_VERSION,
@@ -35,7 +35,7 @@ class Tool_2025_03_26(BaseModel):
     description: str | None = None
     inputSchema: dict[str, Any]
     annotations: ToolAnnotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class Implementation_2025_03_26(BaseModel):
@@ -54,7 +54,7 @@ class Resource_2025_03_26(BaseModel):
     mimeType: str | None = None
     size: int | None = None
     annotations: Annotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class ResourceTemplate_2025_03_26(BaseModel):
@@ -65,7 +65,7 @@ class ResourceTemplate_2025_03_26(BaseModel):
     description: str | None = None
     mimeType: str | None = None
     annotations: Annotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class Prompt_2025_03_26(BaseModel):
@@ -74,7 +74,7 @@ class Prompt_2025_03_26(BaseModel):
     name: str
     description: str | None = None
     arguments: list[PromptArgument] | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 # ============================================================================
@@ -93,7 +93,7 @@ class Tool_2025_06_18(BaseModel):
     inputSchema: dict[str, Any]
     outputSchema: dict[str, Any] | None = None
     annotations: ToolAnnotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class Implementation_2025_06_18(BaseModel):
@@ -115,7 +115,7 @@ class Resource_2025_06_18(BaseModel):
     mimeType: str | None = None
     size: int | None = None
     annotations: Annotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class ResourceTemplate_2025_06_18(BaseModel):
@@ -127,7 +127,7 @@ class ResourceTemplate_2025_06_18(BaseModel):
     description: str | None = None
     mimeType: str | None = None
     annotations: Annotations | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 class Prompt_2025_06_18(BaseModel):
@@ -137,7 +137,7 @@ class Prompt_2025_06_18(BaseModel):
     title: str | None = None
     description: str | None = None
     arguments: list[PromptArgument] | None = None
-    meta: dict[str, Any] | None = None
+    meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
 # ============================================================================
