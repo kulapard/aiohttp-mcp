@@ -47,6 +47,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from aiohttp import HttpVersion
 
+from aiohttp_mcp.protocol.messages import EventMessage
 from aiohttp_mcp.protocol.models import JSONRPCMessage, JSONRPCNotification
 from aiohttp_mcp.streamable_http import (
     CONTENT_TYPE_JSON,
@@ -56,7 +57,6 @@ from aiohttp_mcp.streamable_http import (
     EventType,
     StreamableHTTPServerTransport,
 )
-from aiohttp_mcp.protocol.messages import EventMessage
 
 
 def create_mock_request(
