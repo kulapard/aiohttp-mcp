@@ -4,6 +4,8 @@ Provides request context propagation via contextvars, with support for
 logging, progress reporting, and resource reading.
 """
 
+from __future__ import annotations
+
 import contextvars
 import inspect
 from collections.abc import Callable, Iterable
