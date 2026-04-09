@@ -5,7 +5,10 @@ for bidirectional in-process communication.
 """
 
 import asyncio
+import logging
 from typing import Generic, TypeVar, cast
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -39,8 +42,10 @@ class StreamWriter(Generic[T]):
                 # Use a timeout to avoid deadlocks during cleanup.
                 async with asyncio.timeout(1.0):
                     await self._queue.put(_CLOSED)
-            except (TimeoutError, Exception):
+            except TimeoutError:
                 pass
+            except Exception as e:
+                logger.warning("Unexpected error closing stream writer: %s", e)
 
 
 class StreamReader(Generic[T]):

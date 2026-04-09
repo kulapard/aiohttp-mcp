@@ -74,6 +74,17 @@ class StreamableHTTPSessionManager:
             self._tasks.clear()
             self._server_instances.clear()
 
+    def _on_task_done(self, task: asyncio.Task[None], session_id: str | None) -> None:
+        """Handle completed server tasks — log errors, clean up zombie sessions."""
+        self._tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("Server task for session %s failed: %s", session_id, exc, exc_info=exc)
+            if session_id and session_id in self._server_instances:
+                del self._server_instances[session_id]
+
     async def handle_request(self, request: web.Request) -> web.StreamResponse:
         if not self._running:
             raise RuntimeError("Task group is not initialized. Make sure to use run().")
@@ -103,7 +114,7 @@ class StreamableHTTPSessionManager:
 
         task = asyncio.create_task(run_stateless_server())
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        task.add_done_callback(lambda t: self._on_task_done(t, None))
 
         await ready_event.wait()
         return await http_transport.handle_request(request)
@@ -147,7 +158,7 @@ class StreamableHTTPSessionManager:
 
                 task = asyncio.create_task(run_server())
                 self._tasks.add(task)
-                task.add_done_callback(self._tasks.discard)
+                task.add_done_callback(lambda t: self._on_task_done(t, new_session_id))
 
                 await ready_event.wait()
                 return await http_transport.handle_request(request)

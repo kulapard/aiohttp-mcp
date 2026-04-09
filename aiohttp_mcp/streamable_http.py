@@ -157,7 +157,7 @@ class StreamableHTTPServerTransport:
                 await self._request_streams[request_id][0].aclose()
                 await self._request_streams[request_id][1].aclose()
             except Exception as e:
-                logger.debug("Error closing memory streams: %s", e)
+                logger.warning("Error closing memory streams for request %s: %s", request_id, e)
             finally:
                 self._request_streams.pop(request_id, None)
 
@@ -327,14 +327,11 @@ class StreamableHTTPServerTransport:
 
         except Exception as err:
             logger.exception("Error handling POST request")
-            response = self._create_error_response(
+            return self._create_error_response(
                 f"Error handling POST request: {err}",
                 HTTPStatus.INTERNAL_SERVER_ERROR,
                 INTERNAL_ERROR,
             )
-            if writer:
-                await writer.send(err)
-            return response
 
     async def _handle_get_request(self, request: web.Request) -> web.StreamResponse:  # noqa: C901
         writer = self._read_stream_writer
@@ -426,7 +423,7 @@ class StreamableHTTPServerTransport:
             try:
                 await self._clean_up_memory_streams(key)
             except Exception as e:
-                logger.debug("Error closing stream %s during termination: %s", key, e)
+                logger.warning("Error closing stream %s during termination: %s", key, e)
 
         self._request_streams.clear()
         try:
@@ -439,7 +436,7 @@ class StreamableHTTPServerTransport:
             if self._write_stream is not None:
                 await self._write_stream.aclose()
         except Exception as e:
-            logger.debug("Error closing streams: %s", e)
+            logger.warning("Error closing streams: %s", e)
 
     async def _handle_unsupported_request(self, request: web.Request) -> web.StreamResponse:
         headers = {
@@ -627,4 +624,4 @@ class StreamableHTTPServerTransport:
                     await write_stream_reader.aclose()
                     await write_stream.aclose()
                 except Exception as e:
-                    logger.debug("Error closing streams: %s", e)
+                    logger.warning("Error closing streams: %s", e)
