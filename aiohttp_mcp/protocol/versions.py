@@ -168,14 +168,14 @@ def dump_for_version(obj: BaseModel, version: str) -> dict[str, Any]:
     data through a version-specific model that only contains supported fields.
     """
     if version == LATEST_PROTOCOL_VERSION:
-        return obj.model_dump(by_alias=True, exclude_none=True)
+        return obj.model_dump(mode="json", by_alias=True, exclude_none=True)
 
     versioned_cls = _VERSION_MODELS.get((type(obj), version))
     if versioned_cls is None:
         # No version-specific model — dump as-is (e.g. TextContent, ErrorData)
-        return obj.model_dump(by_alias=True, exclude_none=True)
+        return obj.model_dump(mode="json", by_alias=True, exclude_none=True)
 
     # Convert through the versioned model to drop unsupported fields
     raw = obj.model_dump(by_alias=True)
     versioned = versioned_cls.model_validate(raw)
-    return versioned.model_dump(by_alias=True, exclude_none=True)
+    return versioned.model_dump(mode="json", by_alias=True, exclude_none=True)
