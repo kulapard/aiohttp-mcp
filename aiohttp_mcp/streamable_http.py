@@ -341,7 +341,7 @@ class StreamableHTTPServerTransport:
                 INTERNAL_ERROR,
             )
             if writer:
-                await writer.send(Exception(err))
+                await writer.send(err)
             return response
 
     async def _handle_get_request(self, request: web.Request) -> web.StreamResponse:  # noqa: C901
