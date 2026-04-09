@@ -19,10 +19,6 @@ from aiohttp_mcp.protocol.models import TextContent
 
 logger = logging.getLogger(__name__)
 
-# Set the pytest marker for async tests/fixtures
-pytestmark = pytest.mark.asyncio
-
-
 # Test fixtures for lifespan context
 @dataclass
 class AppContextForTest:

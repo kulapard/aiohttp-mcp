@@ -97,9 +97,6 @@ from .utils import register_mcp_resources
 
 logger = logging.getLogger(__name__)
 
-# Set the pytest marker for async tests/fixtures
-pytestmark = pytest.mark.asyncio
-
 TEST_PATH = "/streamable-mcp"
 
 
