@@ -207,7 +207,7 @@ def get_context_info() -> dict[str, Any]:
     return result
 
 
-async def startup(app_instance: web.Application) -> AsyncIterator[None]:
+async def startup(app: web.Application) -> AsyncIterator[None]:
     """Initialize shared resources on startup, cleanup on shutdown."""
     print("\n=== Application Startup ===")
 
@@ -226,9 +226,9 @@ async def startup(app_instance: web.Application) -> AsyncIterator[None]:
     }
 
     # Store shared resources on the aiohttp app
-    app_instance["db_pool"] = db_pool
-    app_instance["api_client"] = api_client
-    app_instance["config"] = config
+    app["db_pool"] = db_pool
+    app["api_client"] = api_client
+    app["config"] = config
 
     print("=== Startup Complete ===\n")
 
