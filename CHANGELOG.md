@@ -25,7 +25,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Runtime dependencies reduced from 5+ to 3**: `aiohttp`, `aiohttp-sse`, `pydantic`
 - **Minimum Python version raised to 3.11** (for native `asyncio.TaskGroup`)
-- `lifespan` parameter now accepts `Callable[[AiohttpMCP], AsyncContextManager[T]]` instead of `Callable[[FastMCP], ...]`
 - `build_mcp_app()` and `setup_mcp_subapp()` no longer accept `transport_mode` parameter
 - `AppBuilder` simplified to only support Streamable HTTP transport
 - All `anyio` primitives replaced with `asyncio` equivalents (`asyncio.TaskGroup`, `asyncio.Lock`, `asyncio.Queue`)
@@ -37,5 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `TransportMode` enum
 - `AiohttpMCP.completion()` method (FastMCP-specific, not standard MCP)
 - `AiohttpMCP.custom_route()` method (FastMCP-specific, not standard MCP)
+- `lifespan` parameter from `AiohttpMCP` — use `app.cleanup_ctx` + `ctx.app["key"]` instead
+- `Context` generic type parameters — `Context` is now a plain class
 - Python 3.10 support
 - `PROJECT_INDEX.md` (outdated, superseded by CLAUDE.md and README.md)

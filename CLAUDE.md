@@ -118,48 +118,38 @@ async def my_tool(query: str, ctx: Context) -> str:
 All approaches give access to the same `Context` object:
 
 - `ctx.request_id` — JSON-RPC request ID
+- `ctx.app` — aiohttp `Application` for shared state (`ctx.app["db_pool"]`)
 - `ctx.request_context.request` — aiohttp `Request` (headers, cookies, IP)
-- `ctx.request_context.lifespan_context` — shared resources from lifespan
 - `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
 - `await ctx.report_progress(progress, total)` — report progress to client
 - `await ctx.read_resource(uri)` — read a registered resource
 
 ## Context Patterns
 
-### Lifespan Context (Shared Resources)
+### Shared State via `ctx.app`
 
-Use lifespan context to provide shared resources (database pools, API clients, config) to all tools:
+Store shared resources (database pools, API clients, config) on the aiohttp Application using `app.cleanup_ctx` for lifecycle management:
 
 ```python
-from contextlib import asynccontextmanager
-from dataclasses import dataclass
-from aiohttp_mcp import AiohttpMCP, Context
+from collections.abc import AsyncIterator
+from aiohttp import web
+from aiohttp_mcp import AiohttpMCP, build_mcp_app, get_current_context
 
-@dataclass
-class AppContext:
-    db_pool: DatabasePool
-    config: dict
-
-@asynccontextmanager
-async def app_lifespan(server):
-    # Startup: Initialize resources
-    db_pool = await create_db_pool("postgresql://localhost/mydb")
-    config = {"max_results": 100}
-
-    try:
-        yield AppContext(db_pool=db_pool, config=config)
-    finally:
-        # Shutdown: Clean up
-        await db_pool.close()
-
-# Create MCP with lifespan
-mcp = AiohttpMCP(lifespan=app_lifespan)
+mcp = AiohttpMCP()
 
 @mcp.tool()
-async def query_db(sql: str, ctx: Context) -> str:
-    # Access shared DB pool from lifespan context
-    db_pool = ctx.request_context.lifespan_context.db_pool
+async def query_db(sql: str) -> str:
+    ctx = get_current_context()
+    db_pool = ctx.app["db_pool"]
     return await db_pool.query(sql)
+
+async def startup(app: web.Application) -> AsyncIterator[None]:
+    app["db_pool"] = await create_db_pool("postgresql://localhost/mydb")
+    yield
+    await app["db_pool"].close()
+
+app = build_mcp_app(mcp, path="/mcp")
+app.cleanup_ctx.append(startup)
 ```
 
 ### Request Context (Per-Request Data)
@@ -219,16 +209,13 @@ async def authenticated_handler(request):
     return await app_builder.streamable_http_handler(request)
 ```
 
-**Combining Both Contexts:**
-
-See `examples/server_context.py` for a complete example showing how to use both lifespan context (shared resources) and request context (per-request auth/identity) together.
+See `examples/server_context.py` for a complete example showing shared state via `ctx.app` and per-request context together.
 
 ## Examples
 
 - `examples/server.py` - Basic MCP server with simple tools
-- `examples/server_streamable_http.py` - Streamable HTTP transport with stateless mode
 - `examples/server_auth.py` - Authentication patterns and request context access
-- `examples/server_context.py` - Combined lifespan and request context usage
+- `examples/server_context.py` - Shared app state and request context usage
 - `examples/server_custom.py` - Custom handlers and advanced patterns
 
 ## Testing
