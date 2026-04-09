@@ -142,7 +142,7 @@ mcp = AiohttpMCP(name="Context Demo Server", debug=True, lifespan=app_lifespan)
 
 # Helper function to extract user identity from request
 def get_user_id(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> str:
     """Extract user ID from request headers."""
     request = ctx.request_context.request
@@ -172,7 +172,7 @@ def get_user_id(
 )
 async def query_database(
     sql: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> str:
     """Execute a database query with user identity for logging.
 
@@ -208,7 +208,7 @@ async def query_database(
 )
 async def check_permissions(
     action: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> dict[str, object]:
     """Check if the current user has permission to perform an action.
 
@@ -244,7 +244,7 @@ async def check_permissions(
 )
 async def call_external_service(
     endpoint: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> dict[str, object]:
     """Call an external API using shared client and user identity.
 
@@ -274,7 +274,7 @@ async def call_external_service(
     description="Get application configuration from the lifespan context",
 )
 def get_config(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> dict[str, object]:
     """Get application configuration from lifespan context."""
     app = ctx.request_context.lifespan_context
@@ -294,7 +294,7 @@ def get_config(
     description="Show all available lifespan and request context information for debugging",
 )
 def get_context_info(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, AppContext],
 ) -> dict[str, Any]:
     """Show all available context information (for debugging).
 
