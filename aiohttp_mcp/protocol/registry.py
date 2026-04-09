@@ -35,6 +35,7 @@ from .models import (
     Tool,
     ToolAnnotations,
 )
+from .typedefs import get_fn_name
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ class Registry:
         meta: dict[str, Any] | None = None,
         structured_output: bool | None = None,
     ) -> None:
-        tool_name = name or fn.__name__
+        tool_name = name or get_fn_name(fn)
         tool_description = description or fn.__doc__ or ""
 
         if tool_name in self._tools and self._warn_on_duplicate_tools:
@@ -245,7 +246,7 @@ class Registry:
         icons: list[Icon] | None = None,
         annotations: Annotations | None = None,
     ) -> None:
-        resource_name = name or fn.__name__
+        resource_name = name or get_fn_name(fn)
         is_template = _is_uri_template(uri)
         uri_params = _extract_uri_params(uri) if is_template else []
 
@@ -353,7 +354,7 @@ class Registry:
         description: str | None = None,
         icons: list[Icon] | None = None,
     ) -> None:
-        prompt_name = name or fn.__name__
+        prompt_name = name or get_fn_name(fn)
         if prompt_name in self._prompts and self._warn_on_duplicate_prompts:
             logger.warning("Prompt '%s' is already registered, overwriting", prompt_name)
 

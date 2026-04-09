@@ -13,6 +13,8 @@ from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema, create_model
 from pydantic.fields import FieldInfo
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 
+from .typedefs import get_fn_name
+
 
 class InvalidSignature(Exception):
     """Raised when a function has an invalid signature for MCP tool use."""
@@ -121,13 +123,13 @@ def func_metadata(
     try:
         sig = inspect.signature(func, eval_str=True)
     except NameError as e:
-        raise InvalidSignature(f"Unable to evaluate type annotations for {func.__name__!r}") from e
+        raise InvalidSignature(f"Unable to evaluate type annotations for {get_fn_name(func)!r}") from e
 
     dynamic_pydantic_model_params: dict[str, Any] = {}
 
     for param in sig.parameters.values():
         if param.name.startswith("_"):
-            raise InvalidSignature(f"Parameter {param.name} of {func.__name__} cannot start with '_'")
+            raise InvalidSignature(f"Parameter {param.name} of {get_fn_name(func)} cannot start with '_'")
         if param.name in skip_names:
             continue
 
@@ -152,7 +154,7 @@ def func_metadata(
             dynamic_pydantic_model_params[field_name] = annotated_type
 
     arguments_model = create_model(
-        f"{func.__name__}Arguments",
+        f"{get_fn_name(func)}Arguments",
         __base__=ArgModelBase,
         **dynamic_pydantic_model_params,
     )
