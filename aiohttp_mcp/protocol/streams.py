@@ -34,16 +34,13 @@ class StreamWriter(Generic[T]):
     async def aclose(self) -> None:
         if not self._closed:
             self._closed = True
-            # Drain one item to make room for the sentinel if the queue is full
-            while True:
-                try:
-                    self._queue.put_nowait(_CLOSED)
-                    break
-                except asyncio.QueueFull:
-                    try:
-                        self._queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        break
+            try:
+                # Block until there's room — the reader will drain items.
+                # Use a timeout to avoid deadlocks during cleanup.
+                async with asyncio.timeout(1.0):
+                    await self._queue.put(_CLOSED)
+            except (TimeoutError, asyncio.QueueShutDown):
+                pass
 
 
 class StreamReader(Generic[T]):
@@ -81,10 +78,7 @@ def create_memory_stream(max_buffer_size: int = 0) -> tuple[StreamWriter[T], Str
     """Create a connected (writer, reader) stream pair.
 
     Args:
-        max_buffer_size: Maximum items buffered. 0 means use a small buffer (1).
+        max_buffer_size: Maximum items buffered. 0 means unlimited.
     """
-    # asyncio.Queue(maxsize=0) means unlimited, but we want rendezvous-like behavior
-    # Use maxsize=1 for bounded behavior similar to anyio's max_buffer_size=0
-    maxsize = max(max_buffer_size, 1)
-    queue: asyncio.Queue[T | object] = asyncio.Queue(maxsize=maxsize)
+    queue: asyncio.Queue[T | object] = asyncio.Queue(maxsize=max_buffer_size)
     return StreamWriter(queue), StreamReader(queue)
