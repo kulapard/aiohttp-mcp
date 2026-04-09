@@ -9,7 +9,7 @@ import asyncio
 import pytest
 
 from aiohttp_mcp.protocol.context import Context
-from aiohttp_mcp.protocol.messages import ServerMessageMetadata, SessionMessage
+from aiohttp_mcp.protocol.messages import SessionMessage
 from aiohttp_mcp.protocol.models import (
     LATEST_PROTOCOL_VERSION,
     METHOD_NOT_FOUND,
@@ -18,9 +18,8 @@ from aiohttp_mcp.protocol.models import (
     JSONRPCNotification,
     JSONRPCRequest,
     JSONRPCResponse,
-    TextContent,
 )
-from aiohttp_mcp.protocol.registry import Registry, ToolError
+from aiohttp_mcp.protocol.registry import Registry
 from aiohttp_mcp.protocol.server import MCPServer
 from aiohttp_mcp.protocol.streams import create_memory_stream
 

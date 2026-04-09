@@ -222,9 +222,7 @@ class StreamableHTTPServerTransport:
             try:
                 message = JSONRPCMessage.model_validate(raw_message)
             except ValidationError as e:
-                return self._create_error_response(
-                    f"Validation error: {e!s}", HTTPStatus.BAD_REQUEST, INVALID_PARAMS
-                )
+                return self._create_error_response(f"Validation error: {e!s}", HTTPStatus.BAD_REQUEST, INVALID_PARAMS)
 
             is_initialization_request = isinstance(message.root, JSONRPCRequest) and message.root.method == "initialize"
 
@@ -514,6 +512,7 @@ class StreamableHTTPServerTransport:
 
             async def replay_sender() -> None:
                 try:
+
                     async def send_event(event_message: EventMessage) -> None:
                         event_data = self._create_event_data(event_message)
                         await sse_stream_writer.send(event_data)
@@ -610,9 +609,7 @@ class StreamableHTTPServerTransport:
 
                     if request_stream_id in self._request_streams:
                         try:
-                            await self._request_streams[request_stream_id][0].send(
-                                EventMessage(message, event_id)
-                            )
+                            await self._request_streams[request_stream_id][0].send(EventMessage(message, event_id))
                         except ClosedStreamError:
                             self._request_streams.pop(request_stream_id, None)
                     else:

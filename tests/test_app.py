@@ -25,9 +25,7 @@ def subapp(mcp: AiohttpMCP) -> web.Application:
 
 def has_route(app: web.Application, path: str) -> bool:
     """Check if the given path exists in the app."""
-    return any(
-        route.resource is not None and route.resource.canonical == path for route in app.router.routes()
-    )
+    return any(route.resource is not None and route.resource.canonical == path for route in app.router.routes())
 
 
 @pytest.mark.parametrize("app_fixture", ["standalone_app", "subapp"])

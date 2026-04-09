@@ -99,7 +99,9 @@ class StreamableHTTPSessionManager:
             async with http_transport.connect() as streams:
                 read_stream, write_stream = streams
                 ready_event.set()
-                await self.server.run(read_stream, write_stream, self.server.create_initialization_options(), stateless=True)
+                await self.server.run(
+                    read_stream, write_stream, self.server.create_initialization_options(), stateless=True
+                )
 
         task = asyncio.create_task(run_stateless_server())
         self._tasks.add(task)

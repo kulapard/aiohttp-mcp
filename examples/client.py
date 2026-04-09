@@ -1,13 +1,13 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
+from typing import Self
 
 from anthropic import Anthropic
 from anthropic.types import ContentBlock, MessageParam, TextBlock, ToolParam, ToolResultBlockParam, ToolUseBlock
 from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.sse import sse_client
-from typing_extensions import Self
 
 load_dotenv()  # load environment variables from .env
 

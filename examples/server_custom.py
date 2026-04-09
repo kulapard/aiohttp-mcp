@@ -5,7 +5,6 @@ from aiohttp import web
 
 from aiohttp_mcp import AiohttpMCP, AppBuilder
 
-
 mcp = AiohttpMCP()
 app_builder = AppBuilder(mcp=mcp, path="/mcp")
 
