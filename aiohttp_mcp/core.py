@@ -24,8 +24,6 @@ from .protocol.registry import Registry, ToolError
 from .protocol.server import MCPServer
 from .protocol.typedefs import AnyFunction
 
-logger = logging.getLogger(__name__)
-
 # Re-export for public API
 __all__ = ["AiohttpMCP", "ToolError"]
 
@@ -36,7 +34,6 @@ class AiohttpMCP:
         name: str | None = None,
         instructions: str | None = None,
         debug: bool = False,
-        log_level: str = "INFO",
         warn_on_duplicate_resources: bool = True,
         warn_on_duplicate_tools: bool = True,
         warn_on_duplicate_prompts: bool = True,
@@ -85,8 +82,6 @@ class AiohttpMCP:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         icons: list[Icon] | None = None,
-        meta: dict[str, Any] | None = None,
-        structured_output: bool | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a tool."""
 
@@ -98,8 +93,6 @@ class AiohttpMCP:
                 description=description,
                 annotations=annotations,
                 icons=icons,
-                meta=meta,
-                structured_output=structured_output,
             )
             return fn
 
@@ -113,8 +106,6 @@ class AiohttpMCP:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         icons: list[Icon] | None = None,
-        meta: dict[str, Any] | None = None,
-        structured_output: bool | None = None,
     ) -> None:
         """Add a tool directly without using a decorator."""
         self._registry.register_tool(
@@ -124,8 +115,6 @@ class AiohttpMCP:
             description=description,
             annotations=annotations,
             icons=icons,
-            meta=meta,
-            structured_output=structured_output,
         )
 
     def remove_tool(self, name: str) -> None:

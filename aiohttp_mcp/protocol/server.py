@@ -66,9 +66,7 @@ class MCPServer:
         self,
         read_stream: StreamReader[SessionMessage | Exception],
         write_stream: StreamWriter[SessionMessage],
-        initialization_options: dict[str, Any] | None = None,
         raise_exceptions: bool = False,
-        stateless: bool = False,
     ) -> None:
         """Main dispatch loop - reads messages and dispatches to handlers."""
         negotiated_version = LATEST_PROTOCOL_VERSION

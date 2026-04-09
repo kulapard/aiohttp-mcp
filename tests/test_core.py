@@ -175,8 +175,6 @@ async def test_tool_with_enhanced_parameters() -> None:
         title="Enhanced Tool",
         description="Tool with extra parameters",
         icons=[icon],
-        meta={"version": "1.0"},
-        structured_output=True,
     )
     def enhanced_tool(value: int) -> int:
         """Enhanced tool."""

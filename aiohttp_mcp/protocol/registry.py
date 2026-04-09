@@ -60,8 +60,6 @@ class ToolDef:
     context_kwarg: str | None
     annotations: ToolAnnotations | None = None
     icons: list[Icon] | None = None
-    meta: dict[str, Any] | None = None
-    structured_output: bool | None = None
 
 
 @dataclass
@@ -156,8 +154,6 @@ class Registry:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         icons: list[Icon] | None = None,
-        meta: dict[str, Any] | None = None,
-        structured_output: bool | None = None,
     ) -> None:
         tool_name = name or get_fn_name(fn)
         tool_description = description or fn.__doc__ or ""
@@ -181,8 +177,6 @@ class Registry:
             context_kwarg=ctx_kwarg,
             annotations=annotations,
             icons=icons,
-            meta=meta,
-            structured_output=structured_output,
         )
 
     def remove_tool(self, name: str) -> None:

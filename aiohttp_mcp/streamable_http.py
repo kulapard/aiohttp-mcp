@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import re
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from enum import StrEnum
@@ -300,9 +300,6 @@ class StreamableHTTPServerTransport:
                     async with sse_response(request, headers=headers) as sse_resp:
                         async with asyncio.TaskGroup() as tg:
 
-                            async def cancel_on_finish(coro: Callable[[], Awaitable[None]]) -> None:
-                                await coro()
-
                             async def _process_response_inner() -> None:
                                 logger.debug("Starting SSE stream processor")
                                 async for event in sse_stream_reader:
@@ -310,8 +307,8 @@ class StreamableHTTPServerTransport:
                                     await sse_resp.send(data=event.data, event=event.event_type, id=event.event_id)
                                     logger.debug("Sent event via SSE: %s", event)
 
-                            tg.create_task(cancel_on_finish(_process_response_inner))
-                            tg.create_task(cancel_on_finish(_sse_writer))
+                            tg.create_task(_process_response_inner())
+                            tg.create_task(_sse_writer())
 
                             metadata = ServerMessageMetadata(request_context=request)
                             session_message = SessionMessage(message, metadata=metadata)
@@ -600,7 +597,7 @@ class StreamableHTTPServerTransport:
                         except ClosedStreamError:
                             self._request_streams.pop(request_stream_id, None)
                     else:
-                        logging.debug(
+                        logger.debug(
                             "Request stream %s not found for message. "
                             "Still processing message as the client might reconnect and replay.",
                             request_stream_id,

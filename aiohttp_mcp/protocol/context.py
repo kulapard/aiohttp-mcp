@@ -88,19 +88,19 @@ class Context:
             params["logger"] = logger_name
         await sender("notifications/message", params)
 
-    async def debug(self, message: str, **extra: Any) -> None:
+    async def debug(self, message: str) -> None:
         """Send a debug log message to the client."""
         await self.log("debug", message)
 
-    async def info(self, message: str, **extra: Any) -> None:
+    async def info(self, message: str) -> None:
         """Send an info log message to the client."""
         await self.log("info", message)
 
-    async def warning(self, message: str, **extra: Any) -> None:
+    async def warning(self, message: str) -> None:
         """Send a warning log message to the client."""
         await self.log("warning", message)
 
-    async def error(self, message: str, **extra: Any) -> None:
+    async def error(self, message: str) -> None:
         """Send an error log message to the client."""
         await self.log("error", message)
 
