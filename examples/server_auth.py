@@ -10,6 +10,7 @@ Run with: uv run python examples/server_auth.py
 """
 
 import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
@@ -26,7 +27,7 @@ simple_mcp = AiohttpMCP(name="Simple Auth Server", debug=True)
 )
 async def get_time_with_auth(
     timezone: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, None],
 ) -> str:
     """Get the current time, including authentication info from the request.
 
@@ -65,7 +66,7 @@ async def get_time_with_auth(
     description="Echo all HTTP headers, cookies, and request metadata for debugging",
 )
 async def echo_headers(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, None],
 ) -> dict[str, object]:
     """Echo all HTTP headers from the request.
 
@@ -123,7 +124,7 @@ def validate_api_key(api_key: str) -> tuple[bool, str]:
 )
 async def secure_operation(
     data: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, None],
 ) -> str:
     """Perform a secure operation that requires authentication.
 
@@ -172,7 +173,7 @@ async def secure_operation(
     description="Get information about the authenticated user from request headers",
 )
 def get_user_info(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context[Any, None],
 ) -> dict[str, object]:
     """Get information about the authenticated user."""
     request = ctx.request_context.request
