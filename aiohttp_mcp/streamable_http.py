@@ -292,15 +292,12 @@ class StreamableHTTPServerTransport:
                         await self._clean_up_memory_streams(request_id)
 
                 try:
-                    async with sse_response(request) as sse_resp:
-                        headers = {
-                            "Cache-Control": "no-cache, no-transform",
-                            "Connection": "keep-alive",
-                            "Content-Type": CONTENT_TYPE_SSE,
-                            **({MCP_SESSION_ID_HEADER: self.mcp_session_id} if self.mcp_session_id else {}),
-                        }
-                        sse_resp.headers.update(headers)
-
+                    headers = {
+                        "Cache-Control": "no-cache, no-transform",
+                        "Connection": "keep-alive",
+                        **({MCP_SESSION_ID_HEADER: self.mcp_session_id} if self.mcp_session_id else {}),
+                    }
+                    async with sse_response(request, headers=headers) as sse_resp:
                         async with asyncio.TaskGroup() as tg:
 
                             async def cancel_on_finish(coro: Callable[[], Awaitable[None]]) -> None:
@@ -387,9 +384,7 @@ class StreamableHTTPServerTransport:
                 await self._clean_up_memory_streams(GET_STREAM_KEY)
 
         try:
-            async with sse_response(request) as sse_resp:
-                sse_resp.headers.update(headers)
-
+            async with sse_response(request, headers=headers) as sse_resp:
                 async with asyncio.TaskGroup() as tg:
 
                     async def _process_response_inner() -> None:
@@ -528,9 +523,7 @@ class StreamableHTTPServerTransport:
                     await sse_stream_writer.aclose()
 
             try:
-                async with sse_response(request) as sse_resp:
-                    sse_resp.headers.update(headers)
-
+                async with sse_response(request, headers=headers) as sse_resp:
                     async with asyncio.TaskGroup() as tg:
 
                         async def _process_response_inner() -> None:
