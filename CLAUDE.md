@@ -181,3 +181,14 @@ See `examples/server_context.py` for a complete example showing how to use both 
 - Test utilities are in `tests/utils.py`
 - Run individual test files: `uv run pytest tests/test_<module>.py`
 - `mcp` package is a dev dependency used only for E2E test client (`mcp.ClientSession`)
+
+## Documentation Policy
+
+When making meaningful code changes (new features, API changes, bug fixes, dependency changes, removed/added modules), you **must** update the relevant documentation in the same commit or PR:
+
+- **`CHANGELOG.md`** — Add an entry under `[Unreleased]` describing the change
+- **`README.md`** — Update if the change affects public API, usage examples, installation, or requirements
+- **`docs/`** — Update any relevant design documents if architecture changes
+- **`CLAUDE.md`** — Update if the change affects development workflow, architecture, or project conventions
+
+Do not defer documentation to a follow-up task. Code and docs ship together.
