@@ -8,13 +8,12 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
 
 import pytest
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
-from aiohttp_mcp import AiohttpMCP, Context, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, build_mcp_app, get_current_context
 from aiohttp_mcp.protocol.models import TextContent
 
 logger = logging.getLogger(__name__)
@@ -47,10 +46,10 @@ class TestDirectToolCalls:
         mcp = AiohttpMCP(name="Simple Context Test", debug=True)
 
         @mcp.tool()
-        async def echo_with_context(message: str, ctx: Context[Any, None]) -> str:
+        async def echo_with_context(message: str) -> str:
             """Echo message with context info."""
             try:
-                request = ctx.request_context.request
+                request = get_current_context().request_context.request
                 if request:
                     user = str(request.headers.get("X-User-ID", "unknown"))
                     return f"{message} (from user: {user})"
@@ -86,9 +85,9 @@ class TestRequestContextAccess:
         mcp = AiohttpMCP(name="Request Context Test Server", debug=True)
 
         @mcp.tool()
-        async def get_request_headers(ctx: Context[Any, None]) -> dict[str, object]:
+        async def get_request_headers() -> dict[str, object]:
             """Get all HTTP headers from the request."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return {"error": "No request context"}
 
@@ -101,36 +100,36 @@ class TestRequestContextAccess:
             }
 
         @mcp.tool()
-        async def get_auth_header(ctx: Context[Any, None]) -> str:
+        async def get_auth_header() -> str:
             """Get the Authorization header from the request."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return "No request context"
 
             return str(request.headers.get("Authorization", "No auth header"))
 
         @mcp.tool()
-        async def get_user_id(ctx: Context[Any, None]) -> str:
+        async def get_user_id() -> str:
             """Get the X-User-ID header from the request."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return "anonymous"
 
             return str(request.headers.get("X-User-ID", "anonymous"))
 
         @mcp.tool()
-        async def get_client_ip(ctx: Context[Any, None]) -> str:
+        async def get_client_ip() -> str:
             """Get the client IP address."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return "unknown"
 
             return request.remote or "unknown"
 
         @mcp.tool()
-        async def check_cookie(cookie_name: str, ctx: Context[Any, None]) -> dict[str, object]:
+        async def check_cookie(cookie_name: str) -> dict[str, object]:
             """Check if a specific cookie exists."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return {"error": "No request context"}
 
@@ -250,16 +249,16 @@ class TestRequestContextWithLifespan:
         mcp = AiohttpMCP(name="Combined Context Test", debug=True, lifespan=app_lifespan_fixture)
 
         @mcp.tool()
-        async def get_combined_context(ctx: Context[Any, AppContextForTest]) -> dict[str, object]:
+        async def get_combined_context() -> dict[str, object]:
             """Get data from both lifespan and request context."""
             # Access lifespan context
-            app_context = ctx.request_context.lifespan_context
+            app_context = get_current_context().request_context.lifespan_context
             assert app_context is not None
             db_name = app_context.db_name
             api_key = app_context.api_key
 
             # Access request context
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             user_id = "anonymous"
             auth_header = "none"
 
@@ -273,15 +272,15 @@ class TestRequestContextWithLifespan:
             }
 
         @mcp.tool()
-        async def query_with_user(query: str, ctx: Context[Any, AppContextForTest]) -> str:
+        async def query_with_user(query: str) -> str:
             """Simulate database query using both contexts."""
             # Get DB from lifespan context
-            app_context = ctx.request_context.lifespan_context
+            app_context = get_current_context().request_context.lifespan_context
             assert app_context is not None
             db_name = app_context.db_name
 
             # Get user from request context
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             user_id = "anonymous"
             if request:
                 user_id = request.headers.get("X-User-ID", "anonymous")
@@ -325,9 +324,9 @@ class TestAuthenticationPatterns:
         VALID_TOKENS = {"secret-token-123", "test-token-456"}
 
         @mcp.tool()
-        async def secure_operation(data: str, ctx: Context[Any, None]) -> str:
+        async def secure_operation(data: str) -> str:
             """Tool that validates authentication."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return "Error: No request context"
 
@@ -344,7 +343,7 @@ class TestAuthenticationPatterns:
             return f"Success: {data} processed by {user_id}"
 
         @mcp.tool()
-        async def public_operation(data: str, ctx: Context[Any, None]) -> str:
+        async def public_operation(data: str) -> str:
             """Tool that doesn't require authentication."""
             return f"Public: {data}"
 
@@ -398,17 +397,17 @@ class TestEdgeCases:
         mcp = AiohttpMCP(name="Edge Cases Test", debug=True)
 
         @mcp.tool()
-        async def handle_missing_context(ctx: Context[Any, None]) -> str:
+        async def handle_missing_context() -> str:
             """Tool that handles missing request context."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if request is None:
                 return "Request context is None (expected in some scenarios)"
             return "Request context available"
 
         @mcp.tool()
-        async def handle_empty_headers(ctx: Context[Any, None]) -> dict[str, object]:
+        async def handle_empty_headers() -> dict[str, object]:
             """Tool that handles empty headers."""
-            request = ctx.request_context.request
+            request = get_current_context().request_context.request
             if not request:
                 return {"error": "No request"}
 
@@ -460,10 +459,10 @@ class TestRequestContextDataVerification:
         mcp = AiohttpMCP(name="Verification Test Server", debug=True)
 
         @mcp.tool()
-        async def verify_headers(ctx: Context[Any, None]) -> dict[str, object]:
+        async def verify_headers() -> dict[str, object]:
             """Return all headers for verification."""
             try:
-                request = ctx.request_context.request
+                request = get_current_context().request_context.request
                 if not request:
                     return {"error": "No request"}
 
@@ -478,10 +477,10 @@ class TestRequestContextDataVerification:
                 return {"error": "Context not available"}
 
         @mcp.tool()
-        async def verify_cookies(ctx: Context[Any, None]) -> dict[str, object]:
+        async def verify_cookies() -> dict[str, object]:
             """Return cookies for verification."""
             try:
-                request = ctx.request_context.request
+                request = get_current_context().request_context.request
                 if not request:
                     return {"error": "No request"}
 
