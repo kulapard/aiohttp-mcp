@@ -136,14 +136,15 @@ class MockEventStore(EventStore):
         self.events: dict[str, list[tuple[str, JSONRPCMessage | None]]] = {}
         self.event_counter = 0
 
-    async def store_event(self, stream_id: str, message: JSONRPCMessage | None) -> str:
+    async def store_event(self, stream_id: str | int, message: JSONRPCMessage | None) -> str:
         """Store an event and return its ID."""
         event_id = f"event-{self.event_counter}"
         self.event_counter += 1
 
-        if stream_id not in self.events:
-            self.events[stream_id] = []
-        self.events[stream_id].append((event_id, message))
+        key = str(stream_id)
+        if key not in self.events:
+            self.events[key] = []
+        self.events[key].append((event_id, message))
 
         return event_id
 

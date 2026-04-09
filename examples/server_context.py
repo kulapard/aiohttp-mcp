@@ -180,7 +180,7 @@ async def query_database(
         ctx: Context with both lifespan (DB) and request (user) data
     """
     # Access shared database pool from lifespan context
-    db_pool = ctx.request_context.lifespan_context.db_pool
+    db_pool = ctx.request_context.lifespan_context.db_pool  # type: ignore[union-attr]
 
     # Access user identity from request context
     user_id = get_user_id(ctx)
@@ -214,7 +214,7 @@ async def check_permissions(
         ctx: Context with DB and user data
     """
     # Access database from lifespan context
-    db_pool = ctx.request_context.lifespan_context.db_pool
+    db_pool = ctx.request_context.lifespan_context.db_pool  # type: ignore[union-attr]
 
     # Get user identity from request
     user_id = get_user_id(ctx)
@@ -248,7 +248,7 @@ async def call_external_service(
         ctx: Context with API client and user data
     """
     # Access API client from lifespan context
-    api_client = ctx.request_context.lifespan_context.api_client
+    api_client = ctx.request_context.lifespan_context.api_client  # type: ignore[union-attr]
 
     # Get user identity from request
     user_id = get_user_id(ctx)
@@ -270,7 +270,7 @@ def get_config(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:
     """Get application configuration from lifespan context."""
-    config = ctx.request_context.lifespan_context.config
+    config = ctx.request_context.lifespan_context.config  # type: ignore[union-attr]
     user_id = get_user_id(ctx)
 
     return {
@@ -292,8 +292,8 @@ def get_context_info(
     Demonstrates accessing both lifespan and request context.
     """
     # Lifespan context
-    config = ctx.request_context.lifespan_context.config
-    db_connected = ctx.request_context.lifespan_context.db_pool.is_connected
+    config = ctx.request_context.lifespan_context.config  # type: ignore[union-attr]
+    db_connected = ctx.request_context.lifespan_context.db_pool.is_connected  # type: ignore[union-attr]
 
     # Request context
     request = ctx.request_context.request

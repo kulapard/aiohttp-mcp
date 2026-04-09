@@ -24,7 +24,7 @@ class RequestContext(Generic[ServerT, LifespanT]):
     """Per-request context holding the aiohttp Request and lifespan context."""
 
     request_id: str | int | None = None
-    lifespan_context: LifespanT | None = None  # type: ignore[assignment]
+    lifespan_context: LifespanT | None = None
     request: Any = None  # aiohttp.web.Request
     session: Any = None
     _send_notification: NotificationSender | None = field(default=None, repr=False)

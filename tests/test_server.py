@@ -5,6 +5,7 @@ native MCP protocol implementation.
 """
 
 import asyncio
+from typing import Any
 
 import pytest
 
@@ -24,10 +25,10 @@ from aiohttp_mcp.protocol.server import MCPServer
 from aiohttp_mcp.protocol.streams import create_memory_stream
 
 
-async def _run_request(server: MCPServer, request: JSONRPCRequest) -> dict:
+async def _run_request(server: MCPServer, request: JSONRPCRequest) -> dict[str, Any]:
     """Helper: send a single request through the server and return the response result."""
-    read_writer, read_reader = create_memory_stream(0)
-    write_writer, write_reader = create_memory_stream(0)
+    read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+    write_writer, write_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
     msg = SessionMessage(message=JSONRPCMessage(root=request))
     await read_writer.send(msg)
@@ -36,7 +37,7 @@ async def _run_request(server: MCPServer, request: JSONRPCRequest) -> dict:
     server_task = asyncio.create_task(server.run(read_reader, write_writer))
 
     # Collect the first response/error (with timeout to avoid hangs)
-    result: dict = {}
+    result: dict[str, Any] = {}
     try:
         async with asyncio.timeout(5.0):
             async for session_msg in write_reader:
@@ -69,7 +70,7 @@ def registry() -> Registry:
         """A tool that always fails."""
         raise ValueError("Something went wrong")
 
-    async def context_tool(ctx: Context) -> str:
+    async def context_tool(ctx: Context[Any, Any]) -> str:
         """A tool that reads context."""
         return f"request_id={ctx.request_id}"
 
@@ -247,8 +248,8 @@ class TestMethodNotFound:
 class TestNotifications:
     async def test_initialized_notification_accepted(self, server: MCPServer) -> None:
         """Notifications should not produce a response."""
-        read_writer, read_reader = create_memory_stream(0)
-        write_writer, write_reader = create_memory_stream(0)
+        read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+        write_writer, write_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
         notif = JSONRPCNotification(method="notifications/initialized")
         msg = SessionMessage(message=JSONRPCMessage(root=notif))
@@ -272,8 +273,8 @@ class TestNotifications:
 class TestExceptionFromStream:
     async def test_exception_in_stream_is_handled(self, server: MCPServer) -> None:
         """Exceptions received from the read stream should be logged, not crash."""
-        read_writer, read_reader = create_memory_stream(0)
-        write_writer, write_reader = create_memory_stream(0)
+        read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+        write_writer, write_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
         await read_writer.send(RuntimeError("stream error"))
         await read_writer.aclose()
@@ -295,14 +296,14 @@ class TestContextNotifications:
         """Tools using ctx.info() should produce notifications on the write stream."""
         registry = server.registry
 
-        async def logging_tool(ctx: Context) -> str:
+        async def logging_tool(ctx: Context[Any, Any]) -> str:
             await ctx.info("Processing request")
             return "done"
 
         registry.register_tool(logging_tool)
 
-        read_writer, read_reader = create_memory_stream(0)
-        write_writer, write_reader = create_memory_stream(0)
+        read_writer, read_reader = create_memory_stream(0)  # type: ignore[var-annotated]
+        write_writer, write_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
         await read_writer.send(
             SessionMessage(

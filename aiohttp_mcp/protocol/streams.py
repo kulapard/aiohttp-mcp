@@ -70,8 +70,8 @@ class StreamReader(Generic[T]):
     async def __anext__(self) -> T:
         try:
             return await self.receive()
-        except ClosedStreamError:
-            raise StopAsyncIteration
+        except ClosedStreamError as e:
+            raise StopAsyncIteration from e
 
 
 def create_memory_stream(max_buffer_size: int = 0) -> tuple[StreamWriter[T], StreamReader[T]]:

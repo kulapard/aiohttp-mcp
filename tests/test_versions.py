@@ -327,7 +327,7 @@ class TestInitializeVersionNegotiation:
 
     def test_client_requests_no_version(self) -> None:
         server = MCPServer(name="test")
-        result, version = server._handle_initialize({})
+        _, version = server._handle_initialize({})
         assert version == "2025-11-25"
 
     def test_capabilities_present(self) -> None:

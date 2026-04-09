@@ -11,7 +11,7 @@ import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from http import HTTPStatus
 
 from aiohttp import web
@@ -58,12 +58,9 @@ GET_STREAM_KEY = "_GET_stream"
 SESSION_ID_PATTERN = re.compile(r"^[\x21-\x7E]+$")
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     ENDPOINT = "endpoint"
     MESSAGE = "message"
-
-    def __str__(self) -> str:
-        return self.value
 
 
 @dataclass
@@ -279,7 +276,7 @@ class StreamableHTTPServerTransport:
                 finally:
                     await self._clean_up_memory_streams(request_id)
             else:
-                sse_stream_writer, sse_stream_reader = create_memory_stream(0)
+                sse_stream_writer, sse_stream_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
                 async def _sse_writer() -> None:
                     try:
@@ -372,7 +369,7 @@ class StreamableHTTPServerTransport:
                 "Conflict: Only one SSE stream is allowed per session", HTTPStatus.CONFLICT
             )
 
-        sse_stream_writer, sse_stream_reader = create_memory_stream(0)
+        sse_stream_writer, sse_stream_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
         async def standalone_sse_writer() -> None:
             try:
@@ -508,7 +505,7 @@ class StreamableHTTPServerTransport:
             if self.mcp_session_id:
                 headers[MCP_SESSION_ID_HEADER] = self.mcp_session_id
 
-            sse_stream_writer, sse_stream_reader = create_memory_stream(0)
+            sse_stream_writer, sse_stream_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
             async def replay_sender() -> None:
                 try:
@@ -573,8 +570,8 @@ class StreamableHTTPServerTransport:
         None,
     ]:
         """Context manager providing read and write streams for a connection."""
-        read_stream_writer, read_stream = create_memory_stream(0)
-        write_stream, write_stream_reader = create_memory_stream(0)
+        read_stream_writer, read_stream = create_memory_stream(0)  # type: ignore[var-annotated]
+        write_stream, write_stream_reader = create_memory_stream(0)  # type: ignore[var-annotated]
 
         self._read_stream_writer = read_stream_writer
         self._read_stream = read_stream

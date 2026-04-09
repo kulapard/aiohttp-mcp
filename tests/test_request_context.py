@@ -254,6 +254,7 @@ class TestRequestContextWithLifespan:
             """Get data from both lifespan and request context."""
             # Access lifespan context
             app_context = ctx.request_context.lifespan_context
+            assert app_context is not None
             db_name = app_context.db_name
             api_key = app_context.api_key
 
@@ -276,6 +277,7 @@ class TestRequestContextWithLifespan:
             """Simulate database query using both contexts."""
             # Get DB from lifespan context
             app_context = ctx.request_context.lifespan_context
+            assert app_context is not None
             db_name = app_context.db_name
 
             # Get user from request context

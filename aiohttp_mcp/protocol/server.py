@@ -6,7 +6,7 @@ dispatches to handlers, and writes responses back.
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack, asynccontextmanager
 from typing import Any
 
@@ -30,7 +30,7 @@ from .models import (
     ServerCapabilities,
     ToolsCapability,
 )
-from .registry import Registry
+from .registry import Registry, ToolError
 from .streams import StreamReader, StreamWriter
 from .versions import dump_for_version
 
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def _default_lifespan(server: Any):  # type: ignore[override]
+async def _default_lifespan(server: Any) -> AsyncIterator[None]:
     yield None
 
 
@@ -173,7 +173,7 @@ class MCPServer:
                         )
                         await write_stream.send(msg)
 
-                    ctx = Context(
+                    ctx: Context[Any, Any] = Context(
                         RequestContext(
                             request_id=request_id,
                             lifespan_context=lifespan_context,
@@ -182,7 +182,7 @@ class MCPServer:
                             _read_resource=self.registry.read_resource,
                         )
                     )
-                    token = set_current_context(ctx)
+                    set_current_context(ctx)
 
                     try:
                         result = await self._dispatch(method, params, negotiated_version)
@@ -266,7 +266,6 @@ class MCPServer:
         elif method == "tools/call":
             name = params.get("name", "")
             arguments = params.get("arguments", {})
-            from .registry import ToolError
 
             try:
                 content = await self.registry.call_tool(name, arguments)

@@ -22,7 +22,7 @@ class _CleanSchemaGenerator(GenerateJsonSchema):
     """JSON Schema generator that omits the root 'title' added by pydantic."""
 
     def generate(self, schema: Any, mode: str = "validation") -> dict[str, Any]:
-        json_schema = super().generate(schema, mode=mode)
+        json_schema = super().generate(schema, mode=mode)  # type: ignore[arg-type]
         json_schema.pop("title", None)
         json_schema.pop("description", None)
         return json_schema

@@ -322,7 +322,7 @@ class Registry:
         raise ValueError(f"Unknown resource: {uri_str}")
 
     async def _call_resource(self, rd: ResourceDef, params: dict[str, str]) -> Iterable[TextResourceContents]:
-        kwargs = dict(params)
+        kwargs: dict[str, Any] = dict(params)
         if rd.context_kwarg:
             try:
                 kwargs[rd.context_kwarg] = get_current_context()
