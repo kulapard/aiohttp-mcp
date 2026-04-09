@@ -164,11 +164,21 @@ class MCPServer:
                         return
 
                     # Set context for tool/resource/prompt calls
+                    async def _send_notification(method_name: str, params: dict[str, Any] | None) -> None:
+                        notif = JSONRPCNotification(method=method_name, params=params)
+                        msg = SessionMessage(
+                            message=JSONRPCMessage(root=notif),
+                            metadata=ServerMessageMetadata(related_request_id=request_id),
+                        )
+                        await write_stream.send(msg)
+
                     ctx = Context(
                         RequestContext(
                             request_id=request_id,
                             lifespan_context=lifespan_context,
                             request=request_context_data,
+                            _send_notification=_send_notification,
+                            _read_resource=self.registry.read_resource,
                         )
                     )
                     token = set_current_context(ctx)

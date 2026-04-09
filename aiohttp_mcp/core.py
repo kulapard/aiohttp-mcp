@@ -220,6 +220,6 @@ class AiohttpMCP:
         """Get a prompt by name with arguments."""
         return await self._registry.get_prompt(name, arguments)
 
-    def get_context(self) -> Context[Any, Any, Any]:
+    def get_context(self) -> Context[Any, Any]:
         """Get the current request context."""
         return _get_current_context()

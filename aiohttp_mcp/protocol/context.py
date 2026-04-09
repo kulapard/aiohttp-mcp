@@ -1,19 +1,22 @@
 """Context system for MCP tools.
 
-Provides request context propagation via contextvars, preserving the
-ctx.request_context.request and ctx.request_context.lifespan_context
-access patterns from the mcp library.
+Provides request context propagation via contextvars, with support for
+logging, progress reporting, and resource reading — matching the features
+available in FastMCP's Context.
 """
 
 import contextvars
 import inspect
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar, get_args, get_origin
+from typing import Any, Generic, Literal, TypeVar, get_args, get_origin
 
 ServerT = TypeVar("ServerT")
 LifespanT = TypeVar("LifespanT")
-RequestT = TypeVar("RequestT")
+
+# Type alias for the notification sender callback
+NotificationSender = Callable[[str, dict[str, Any] | None], Awaitable[None]]
+ResourceReader = Callable[[str], Awaitable[Iterable[Any]]]
 
 
 @dataclass
@@ -21,17 +24,21 @@ class RequestContext(Generic[ServerT, LifespanT]):
     """Per-request context holding the aiohttp Request and lifespan context."""
 
     request_id: str | int | None = None
-    lifespan_context: LifespanT = field(default=None)  # type: ignore[assignment]
+    lifespan_context: LifespanT | None = None  # type: ignore[assignment]
     request: Any = None  # aiohttp.web.Request
     session: Any = None
+    _send_notification: NotificationSender | None = field(default=None, repr=False)
+    _read_resource: ResourceReader | None = field(default=None, repr=False)
 
 
-class Context(Generic[ServerT, LifespanT, RequestT]):
-    """MCP tool context, providing access to request and lifespan data.
+class Context(Generic[ServerT, LifespanT]):
+    """MCP tool context providing access to request data, logging, and progress.
 
-    Tools can declare a parameter of this type to receive the context:
+    Tools can declare a parameter of this type to receive the context::
+
         @mcp.tool()
         async def my_tool(arg: str, ctx: Context) -> str:
+            await ctx.info(f"Processing {arg}")
             request = ctx.request_context.request
             ...
     """
@@ -43,14 +50,103 @@ class Context(Generic[ServerT, LifespanT, RequestT]):
     def request_context(self) -> RequestContext[ServerT, LifespanT]:
         return self._request_context
 
+    @property
+    def request_id(self) -> str | int | None:
+        """The JSON-RPC request ID for the current call."""
+        return self._request_context.request_id
+
+    # -- Logging methods (send notifications/message to client) --
+
+    async def log(
+        self,
+        level: Literal["debug", "info", "warning", "error"],
+        message: str,
+        *,
+        logger_name: str | None = None,
+    ) -> None:
+        """Send a log message to the MCP client.
+
+        Args:
+            level: Log level (debug, info, warning, error)
+            message: Log message text
+            logger_name: Optional logger name
+        """
+        sender = self._request_context._send_notification
+        if sender is None:
+            return
+        params: dict[str, Any] = {"level": level, "data": message}
+        if logger_name is not None:
+            params["logger"] = logger_name
+        await sender("notifications/message", params)
+
+    async def debug(self, message: str, **extra: Any) -> None:
+        """Send a debug log message to the client."""
+        await self.log("debug", message)
+
+    async def info(self, message: str, **extra: Any) -> None:
+        """Send an info log message to the client."""
+        await self.log("info", message)
+
+    async def warning(self, message: str, **extra: Any) -> None:
+        """Send a warning log message to the client."""
+        await self.log("warning", message)
+
+    async def error(self, message: str, **extra: Any) -> None:
+        """Send an error log message to the client."""
+        await self.log("error", message)
+
+    # -- Progress reporting --
+
+    async def report_progress(
+        self,
+        progress: float,
+        total: float | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Report progress for the current operation.
+
+        Args:
+            progress: Current progress value (e.g. 24)
+            total: Optional total value (e.g. 100)
+            message: Optional progress message
+        """
+        sender = self._request_context._send_notification
+        if sender is None:
+            return
+        params: dict[str, Any] = {"progress": progress}
+        if total is not None:
+            params["total"] = total
+        if message is not None:
+            params["message"] = message
+        # Use request_id as progress token
+        if self._request_context.request_id is not None:
+            params["progressToken"] = self._request_context.request_id
+        await sender("notifications/progress", params)
+
+    # -- Resource reading --
+
+    async def read_resource(self, uri: str) -> Iterable[Any]:
+        """Read a resource by URI.
+
+        Args:
+            uri: Resource URI to read
+
+        Returns:
+            The resource content
+        """
+        reader = self._request_context._read_resource
+        if reader is None:
+            raise RuntimeError("read_resource is not available outside of a server request")
+        return await reader(uri)
+
 
 # ContextVar for propagating the current context through async call chains
-_current_context: contextvars.ContextVar[Context[Any, Any, Any] | None] = contextvars.ContextVar(
+_current_context: contextvars.ContextVar[Context[Any, Any] | None] = contextvars.ContextVar(
     "_current_context", default=None
 )
 
 
-def get_current_context() -> Context[Any, Any, Any]:
+def get_current_context() -> Context[Any, Any]:
     """Get the current MCP context from the contextvar.
 
     Raises ValueError if no context is set.
@@ -61,7 +157,7 @@ def get_current_context() -> Context[Any, Any, Any]:
     return ctx
 
 
-def set_current_context(ctx: Context[Any, Any, Any] | None) -> contextvars.Token[Context[Any, Any, Any] | None]:
+def set_current_context(ctx: Context[Any, Any] | None) -> contextvars.Token[Context[Any, Any] | None]:
     """Set the current MCP context."""
     return _current_context.set(ctx)
 
@@ -84,9 +180,6 @@ def find_context_kwarg(fn: Callable[..., Any]) -> str | None:
             return param.name
         origin = get_origin(annotation)
         if origin is Context:
-            return param.name
-        # Handle string annotations
-        if isinstance(annotation, str) and "Context" in annotation:
             return param.name
         # Check get_args for Annotated types etc.
         args = get_args(annotation)
