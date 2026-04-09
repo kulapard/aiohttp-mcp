@@ -189,7 +189,8 @@ aiohttp_mcp/
     protocol/                      (NEW)
         __init__.py
         streams.py
-        models.py
+        models.py                  (full 2025-11-25 models, used internally)
+        versions.py                (per-version response models for older clients)
         messages.py
         context.py
         func_metadata.py

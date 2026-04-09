@@ -25,7 +25,8 @@ Only 3 runtime dependencies: `aiohttp`, `aiohttp-sse`, `pydantic`
 - **AppBuilder** (`aiohttp_mcp/app.py`): Builds aiohttp applications with MCP server capabilities (Streamable HTTP transport), supporting both standalone apps and sub-applications.
 - **Native Protocol Layer** (`aiohttp_mcp/protocol/`): Complete MCP protocol implementation:
   - `models.py` — MCP Pydantic models (JSON-RPC, Tool, Resource, Prompt, Content types) targeting MCP spec 2025-11-25
-  - `server.py` — `MCPServer` JSON-RPC dispatch engine (handles initialize, ping, tools/*, resources/*, prompts/*)
+  - `versions.py` — Per-version response models for backward compatibility (2025-03-26, 2025-06-18); older clients get responses with only the fields their spec version defines
+  - `server.py` — `MCPServer` JSON-RPC dispatch engine (handles initialize, ping, tools/*, resources/*, prompts/*) with version-aware serialization
   - `registry.py` — Tool/Resource/Prompt registration, execution, and URI template matching
   - `func_metadata.py` — Function introspection for generating JSON Schema from type hints via pydantic
   - `context.py` — Context system with `contextvars` propagation for request/lifespan context

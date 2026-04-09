@@ -15,7 +15,7 @@ Implements the MCP protocol natively — no heavy SDK dependencies. Only 3 runti
 
 ## Features
 
-- Native MCP protocol implementation (MCP spec 2025-11-25)
+- Native MCP protocol implementation (supports specs 2025-11-25, 2025-06-18, 2025-03-26)
 - Streamable HTTP transport with SSE streaming
 - Easy integration with aiohttp web applications
 - Tool, Resource, and Prompt support with decorator-based registration

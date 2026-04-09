@@ -14,8 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Function introspection for automatic JSON Schema generation from type hints
   - asyncio-based memory streams replacing anyio streams
   - Context system with `contextvars` propagation for request/lifespan context
-- MCP protocol version `2025-11-25` support (latest spec)
+- MCP protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26` supported
+  - Version negotiation during initialize handshake
+  - Per-version response models that exclude fields absent in older specs
 - Design document at `docs/native-mcp-implementation-plan.md`
+- Documentation policy in CLAUDE.md — code and docs ship together
 
 ### Changed
 - **Runtime dependencies reduced from 5+ to 3**: `aiohttp`, `aiohttp-sse`, `pydantic`
@@ -33,3 +36,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AiohttpMCP.completion()` method (FastMCP-specific, not standard MCP)
 - `AiohttpMCP.custom_route()` method (FastMCP-specific, not standard MCP)
 - Python 3.10 support
+- `PROJECT_INDEX.md` (outdated, superseded by CLAUDE.md and README.md)
