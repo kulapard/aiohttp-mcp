@@ -108,9 +108,6 @@ def _is_uri_template(uri: str) -> bool:
 
 def _match_uri(uri_template: str, uri: str) -> dict[str, str] | None:
     """Match a URI against a template, returning extracted params or None."""
-    pattern = _URI_PARAM_RE.sub(r"(?P<\\1>[^/]+)", re.escape(uri_template))
-    pattern = pattern.replace(r"\{", "{").replace(r"\}", "}")
-    # The re.escape + sub dance can get tricky, let's do it simply:
     regex_parts = []
     last_end = 0
     for m in _URI_PARAM_RE.finditer(uri_template):
@@ -330,7 +327,7 @@ class Registry:
             try:
                 kwargs[rd.context_kwarg] = get_current_context()
             except ValueError:
-                pass
+                kwargs[rd.context_kwarg] = Context(request_context=RequestContext())
 
         if rd.is_async:
             result = await rd.fn(**kwargs)
@@ -410,7 +407,7 @@ class Registry:
             try:
                 kwargs[pd.context_kwarg] = get_current_context()
             except ValueError:
-                pass
+                kwargs[pd.context_kwarg] = Context(request_context=RequestContext())
 
         if pd.is_async:
             result = await pd.fn(**kwargs)
