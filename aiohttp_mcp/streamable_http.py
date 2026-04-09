@@ -285,18 +285,11 @@ class StreamableHTTPServerTransport:
 
                 async def _sse_writer() -> None:
                     try:
-                        async with asyncio.TaskGroup() as _:
-                            pass  # just for scope
-                    except BaseException:
-                        pass
-                    try:
                         async for event_message in request_stream_reader:
                             event_data = self._create_event_data(event_message)
                             await sse_stream_writer.send(event_data)
                             if isinstance(event_message.message.root, JSONRPCResponse | JSONRPCError):
                                 break
-                    except Exception as e:
-                        logger.exception("Error in SSE writer: %s", e)
                     finally:
                         logger.debug("Closing SSE writer")
                         await sse_stream_writer.aclose()
@@ -592,45 +585,42 @@ class StreamableHTTPServerTransport:
         async with asyncio.TaskGroup() as tg:
 
             async def message_router() -> None:
-                try:
-                    async for session_message in write_stream_reader:
-                        message = session_message.message
-                        target_request_id = None
+                async for session_message in write_stream_reader:
+                    message = session_message.message
+                    target_request_id = None
 
-                        if isinstance(message.root, JSONRPCResponse | JSONRPCError):
-                            response_id = str(message.root.id)
-                            if response_id in self._request_streams:
-                                target_request_id = response_id
-                        else:
-                            if (
-                                session_message.metadata is not None
-                                and isinstance(session_message.metadata, ServerMessageMetadata)
-                                and session_message.metadata.related_request_id is not None
-                            ):
-                                target_request_id = str(session_message.metadata.related_request_id)
+                    if isinstance(message.root, JSONRPCResponse | JSONRPCError):
+                        response_id = str(message.root.id)
+                        if response_id in self._request_streams:
+                            target_request_id = response_id
+                    else:
+                        if (
+                            session_message.metadata is not None
+                            and isinstance(session_message.metadata, ServerMessageMetadata)
+                            and session_message.metadata.related_request_id is not None
+                        ):
+                            target_request_id = str(session_message.metadata.related_request_id)
 
-                        request_stream_id = target_request_id if target_request_id is not None else GET_STREAM_KEY
+                    request_stream_id = target_request_id if target_request_id is not None else GET_STREAM_KEY
 
-                        event_id = None
-                        if self._event_store:
-                            event_id = await self._event_store.store_event(request_stream_id, message)
-                            logger.debug("Stored %s from %s", event_id, request_stream_id)
+                    event_id = None
+                    if self._event_store:
+                        event_id = await self._event_store.store_event(request_stream_id, message)
+                        logger.debug("Stored %s from %s", event_id, request_stream_id)
 
-                        if request_stream_id in self._request_streams:
-                            try:
-                                await self._request_streams[request_stream_id][0].send(
-                                    EventMessage(message, event_id)
-                                )
-                            except ClosedStreamError:
-                                self._request_streams.pop(request_stream_id, None)
-                        else:
-                            logging.debug(
-                                "Request stream %s not found for message. "
-                                "Still processing message as the client might reconnect and replay.",
-                                request_stream_id,
+                    if request_stream_id in self._request_streams:
+                        try:
+                            await self._request_streams[request_stream_id][0].send(
+                                EventMessage(message, event_id)
                             )
-                except Exception as e:
-                    logger.exception("Error in message router: %s", e)
+                        except ClosedStreamError:
+                            self._request_streams.pop(request_stream_id, None)
+                    else:
+                        logging.debug(
+                            "Request stream %s not found for message. "
+                            "Still processing message as the client might reconnect and replay.",
+                            request_stream_id,
+                        )
 
             tg.create_task(message_router())
 
