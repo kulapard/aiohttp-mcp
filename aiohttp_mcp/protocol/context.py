@@ -16,12 +16,11 @@ if TYPE_CHECKING:
 
 from .typedefs import NotificationSender, ResourceReader
 
-ServerT = TypeVar("ServerT")
 LifespanT = TypeVar("LifespanT")
 
 
 @dataclass
-class RequestContext(Generic[ServerT, LifespanT]):
+class RequestContext(Generic[LifespanT]):
     """Per-request context holding the aiohttp Request and lifespan context."""
 
     request_id: str | int | None = None
@@ -32,7 +31,7 @@ class RequestContext(Generic[ServerT, LifespanT]):
     _read_resource: ResourceReader | None = field(default=None, repr=False)
 
 
-class Context(Generic[ServerT, LifespanT]):
+class Context(Generic[LifespanT]):
     """MCP tool context providing access to request data, logging, and progress.
 
     Tools can declare a parameter of this type to receive the context::
@@ -44,11 +43,11 @@ class Context(Generic[ServerT, LifespanT]):
             ...
     """
 
-    def __init__(self, request_context: RequestContext[ServerT, LifespanT]) -> None:
+    def __init__(self, request_context: RequestContext[LifespanT]) -> None:
         self._request_context = request_context
 
     @property
-    def request_context(self) -> RequestContext[ServerT, LifespanT]:
+    def request_context(self) -> RequestContext[LifespanT]:
         return self._request_context
 
     @property
@@ -159,12 +158,10 @@ class Context(Generic[ServerT, LifespanT]):
 
 
 # ContextVar for propagating the current context through async call chains
-_current_context: contextvars.ContextVar[Context[Any, Any] | None] = contextvars.ContextVar(
-    "_current_context", default=None
-)
+_current_context: contextvars.ContextVar[Context[Any] | None] = contextvars.ContextVar("_current_context", default=None)
 
 
-def get_current_context() -> Context[Any, Any]:
+def get_current_context() -> Context[Any]:
     """Get the current MCP context from the contextvar.
 
     Raises ValueError if no context is set.
@@ -175,7 +172,7 @@ def get_current_context() -> Context[Any, Any]:
     return ctx
 
 
-def set_current_context(ctx: Context[Any, Any] | None) -> contextvars.Token[Context[Any, Any] | None]:
+def set_current_context(ctx: Context[Any] | None) -> contextvars.Token[Context[Any] | None]:
     """Set the current MCP context."""
     return _current_context.set(ctx)
 

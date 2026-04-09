@@ -173,7 +173,7 @@ class MCPServer:
                         )
                         await write_stream.send(msg)
 
-                    ctx: Context[Any, Any] = Context(
+                    ctx: Context[Any] = Context(
                         RequestContext(
                             request_id=request_id,
                             lifespan_context=lifespan_context,
