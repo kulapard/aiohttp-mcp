@@ -15,6 +15,7 @@ from .messages import ServerMessageMetadata, SessionMessage
 from .models import (
     INTERNAL_ERROR,
     LATEST_PROTOCOL_VERSION,
+    METHOD_NOT_FOUND,
     SUPPORTED_PROTOCOL_VERSIONS,
     ErrorData,
     Implementation,
@@ -191,6 +192,14 @@ class MCPServer:
                         )
                     finally:
                         set_current_context(None)
+
+                except _MethodNotFoundError as e:
+                    await send_error(
+                        request_id,
+                        METHOD_NOT_FOUND,
+                        str(e),
+                        metadata=response_metadata,
+                    )
 
                 except Exception as e:
                     logger.exception("Error handling request %s: %s", method, e)
