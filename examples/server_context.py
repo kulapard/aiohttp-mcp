@@ -16,6 +16,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import Any
 
 from aiohttp import web
 
@@ -100,7 +101,7 @@ class AppContext:
 
     db_pool: DatabasePool
     api_client: ExternalAPIClient
-    config: dict[str, object]
+    config: dict[str, Any]
 
 
 # Create lifespan context manager
@@ -180,7 +181,9 @@ async def query_database(
         ctx: Context with both lifespan (DB) and request (user) data
     """
     # Access shared database pool from lifespan context
-    db_pool = ctx.request_context.lifespan_context.db_pool  # type: ignore[union-attr]
+    app = ctx.request_context.lifespan_context
+    assert app is not None
+    db_pool = app.db_pool
 
     # Access user identity from request context
     user_id = get_user_id(ctx)
@@ -214,7 +217,9 @@ async def check_permissions(
         ctx: Context with DB and user data
     """
     # Access database from lifespan context
-    db_pool = ctx.request_context.lifespan_context.db_pool  # type: ignore[union-attr]
+    app = ctx.request_context.lifespan_context
+    assert app is not None
+    db_pool = app.db_pool
 
     # Get user identity from request
     user_id = get_user_id(ctx)
@@ -248,7 +253,9 @@ async def call_external_service(
         ctx: Context with API client and user data
     """
     # Access API client from lifespan context
-    api_client = ctx.request_context.lifespan_context.api_client  # type: ignore[union-attr]
+    app = ctx.request_context.lifespan_context
+    assert app is not None
+    api_client = app.api_client
 
     # Get user identity from request
     user_id = get_user_id(ctx)
@@ -270,7 +277,9 @@ def get_config(
     ctx: Context,  # type: ignore[type-arg]
 ) -> dict[str, object]:
     """Get application configuration from lifespan context."""
-    config = ctx.request_context.lifespan_context.config  # type: ignore[union-attr]
+    app = ctx.request_context.lifespan_context
+    assert app is not None
+    config = app.config
     user_id = get_user_id(ctx)
 
     return {
@@ -286,14 +295,16 @@ def get_config(
 )
 def get_context_info(
     ctx: Context,  # type: ignore[type-arg]
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Show all available context information (for debugging).
 
     Demonstrates accessing both lifespan and request context.
     """
     # Lifespan context
-    config = ctx.request_context.lifespan_context.config  # type: ignore[union-attr]
-    db_connected = ctx.request_context.lifespan_context.db_pool.is_connected  # type: ignore[union-attr]
+    app = ctx.request_context.lifespan_context
+    assert app is not None
+    config = app.config
+    db_connected = app.db_pool.is_connected
 
     # Request context
     request = ctx.request_context.request
@@ -319,7 +330,7 @@ def get_context_info(
     else:
         result["request_context"] = "Not available"
 
-    return result  # type: ignore[return-value]
+    return result
 
 
 if __name__ == "__main__":
