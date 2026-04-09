@@ -15,7 +15,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from aiohttp_mcp import AiohttpMCP, Context, build_mcp_app
-from aiohttp_mcp.types import TextContent
+from aiohttp_mcp.protocol.models import TextContent
 
 logger = logging.getLogger(__name__)
 

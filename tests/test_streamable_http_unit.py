@@ -56,7 +56,7 @@ from aiohttp_mcp.streamable_http import (
     EventType,
     StreamableHTTPServerTransport,
 )
-from aiohttp_mcp.types import EventMessage
+from aiohttp_mcp.protocol.messages import EventMessage
 
 
 def create_mock_request(

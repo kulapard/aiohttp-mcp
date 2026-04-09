@@ -2,7 +2,8 @@ import pytest
 from aiohttp import web
 
 from aiohttp_mcp import AiohttpMCP
-from aiohttp_mcp.types import Annotations, Icon, TextContent, Tool, ToolError
+from aiohttp_mcp import Annotations, Icon, Tool, ToolAnnotations, ToolError
+from aiohttp_mcp.protocol.models import TextContent
 
 from .utils import register_mcp_resources
 
