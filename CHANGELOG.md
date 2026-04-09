@@ -17,8 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCP protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26` supported
   - Version negotiation during initialize handshake
   - Per-version response models that exclude fields absent in older specs
+- `Context` features restored from FastMCP: `request_id`, `log()`/`debug()`/`info()`/`warning()`/`error()`, `report_progress()`, `read_resource()`
 - Design document at `docs/native-mcp-implementation-plan.md`
 - Documentation policy in CLAUDE.md — code and docs ship together
+- MCPServer dispatch loop tests (18 tests, 87% server.py coverage)
 
 ### Changed
 - **Runtime dependencies reduced from 5+ to 3**: `aiohttp`, `aiohttp-sse`, `pydantic`
