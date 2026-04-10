@@ -1,6 +1,7 @@
 """Tests for structured return types (BaseModel, dataclass) and outputSchema generation."""
 
 import dataclasses
+import json
 
 from pydantic import BaseModel
 
@@ -48,11 +49,16 @@ class TestOutputSchemaGeneration:
 
         tools = await mcp.list_tools()
         assert len(tools) == 1
-        assert tools[0].outputSchema is not None
         schema = tools[0].outputSchema
-        assert schema["type"] == "object"
-        assert "name" in schema["properties"]
-        assert "email" in schema["properties"]
+        assert schema == {
+            "properties": {
+                "name": {"title": "Name", "type": "string"},
+                "email": {"title": "Email", "type": "string"},
+            },
+            "required": ["name", "email"],
+            "title": "UserModel",
+            "type": "object",
+        }
 
     async def test_dataclass_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -63,11 +69,16 @@ class TestOutputSchemaGeneration:
 
         tools = await mcp.list_tools()
         assert len(tools) == 1
-        assert tools[0].outputSchema is not None
         schema = tools[0].outputSchema
-        assert schema["type"] == "object"
-        assert "name" in schema["properties"]
-        assert "email" in schema["properties"]
+        assert schema == {
+            "properties": {
+                "name": {"title": "Name", "type": "string"},
+                "email": {"title": "Email", "type": "string"},
+            },
+            "required": ["name", "email"],
+            "title": "UserDC",
+            "type": "object",
+        }
 
     async def test_dataclass_with_defaults_in_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -79,7 +90,10 @@ class TestOutputSchemaGeneration:
         tools = await mcp.list_tools()
         schema = tools[0].outputSchema
         assert schema is not None
-        assert schema["properties"]["age"]["default"] == 25
+        assert schema["properties"]["name"] == {"title": "Name", "type": "string"}
+        assert schema["properties"]["email"] == {"title": "Email", "type": "string"}
+        assert schema["properties"]["age"] == {"default": 25, "title": "Age", "type": "integer"}
+        assert schema["required"] == ["name", "email"]
 
     async def test_nested_model_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -91,8 +105,20 @@ class TestOutputSchemaGeneration:
         tools = await mcp.list_tools()
         schema = tools[0].outputSchema
         assert schema is not None
-        assert "user" in schema["properties"]
-        assert "$defs" in schema or "definitions" in schema or "$ref" in schema["properties"]["user"]
+        assert schema["type"] == "object"
+        assert schema["required"] == ["user", "role"]
+        assert schema["properties"]["role"] == {"title": "Role", "type": "string"}
+        assert schema["properties"]["user"] == {"$ref": "#/$defs/UserModel"}
+        assert "$defs" in schema
+        assert schema["$defs"]["UserModel"] == {
+            "properties": {
+                "name": {"title": "Name", "type": "string"},
+                "email": {"title": "Email", "type": "string"},
+            },
+            "required": ["name", "email"],
+            "title": "UserModel",
+            "type": "object",
+        }
 
     async def test_str_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -102,8 +128,7 @@ class TestOutputSchemaGeneration:
             return msg
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert tools[0].outputSchema["type"] == "string"
+        assert tools[0].outputSchema == {"type": "string"}
 
     async def test_int_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -113,8 +138,7 @@ class TestOutputSchemaGeneration:
             return 42
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert tools[0].outputSchema["type"] == "integer"
+        assert tools[0].outputSchema == {"type": "integer"}
 
     async def test_bool_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -124,8 +148,17 @@ class TestOutputSchemaGeneration:
             return True
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert tools[0].outputSchema["type"] == "boolean"
+        assert tools[0].outputSchema == {"type": "boolean"}
+
+    async def test_float_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def measure() -> float:
+            return 3.14
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema == {"type": "number"}
 
     async def test_list_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -135,8 +168,10 @@ class TestOutputSchemaGeneration:
             return ["a", "b"]
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert tools[0].outputSchema["type"] == "array"
+        assert tools[0].outputSchema == {
+            "items": {"type": "string"},
+            "type": "array",
+        }
 
     async def test_dict_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -146,8 +181,10 @@ class TestOutputSchemaGeneration:
             return {"key": 1}
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert tools[0].outputSchema["type"] == "object"
+        assert tools[0].outputSchema == {
+            "additionalProperties": {"type": "integer"},
+            "type": "object",
+        }
 
     async def test_optional_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -157,8 +194,9 @@ class TestOutputSchemaGeneration:
             return None
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is not None
-        assert "anyOf" in tools[0].outputSchema
+        assert tools[0].outputSchema == {
+            "anyOf": [{"type": "string"}, {"type": "null"}],
+        }
 
     async def test_no_return_annotation_no_output_schema(self) -> None:
         mcp = AiohttpMCP()
@@ -191,8 +229,7 @@ class TestStructuredReturnSerialization:
         assert len(result) == 1
         content = result[0]
         assert isinstance(content, TextContent)
-        assert '"name":"Alice"' in content.text or '"name": "Alice"' in content.text
-        assert '"email":"a@b.com"' in content.text or '"email": "a@b.com"' in content.text
+        assert json.loads(content.text) == {"name": "Alice", "email": "a@b.com"}
 
     async def test_dataclass_return_serialized_to_json(self) -> None:
         mcp = AiohttpMCP()
@@ -205,8 +242,34 @@ class TestStructuredReturnSerialization:
         assert len(result) == 1
         content = result[0]
         assert isinstance(content, TextContent)
-        assert '"name":"Bob"' in content.text or '"name": "Bob"' in content.text
-        assert '"email":"b@b.com"' in content.text or '"email": "b@b.com"' in content.text
+        assert json.loads(content.text) == {"name": "Bob", "email": "b@b.com"}
+
+    async def test_dataclass_with_defaults_serialized(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserDCWithDefaults:
+            return UserDCWithDefaults(name="Alice", email="a@b.com")
+
+        result = await mcp.call_tool("get_user", {})
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"name": "Alice", "email": "a@b.com", "age": 25}
+
+    async def test_nested_model_serialized_to_json(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_admin() -> NestedModel:
+            return NestedModel(user=UserModel(name="Alice", email="a@b.com"), role="admin")
+
+        result = await mcp.call_tool("get_admin", {})
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {
+            "user": {"name": "Alice", "email": "a@b.com"},
+            "role": "admin",
+        }
 
     async def test_basemodel_not_str_repr(self) -> None:
         """Ensure BaseModel is not serialized via str() which produces a repr."""
@@ -244,10 +307,23 @@ class TestStructuredReturnSerialization:
             return UserModel(name="Async", email="async@b.com")
 
         result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
         content = result[0]
         assert isinstance(content, TextContent)
-        assert "Async" in content.text
-        assert "async@b.com" in content.text
+        assert json.loads(content.text) == {"name": "Async", "email": "async@b.com"}
+
+    async def test_async_tool_with_dataclass_return(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        async def get_user() -> UserDC:
+            return UserDC(name="Async", email="async@b.com")
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"name": "Async", "email": "async@b.com"}
 
 
 # -- Tests: backward compatibility --
@@ -264,7 +340,10 @@ class TestBackwardCompatibility:
             return msg
 
         result = await mcp.call_tool("echo", {"msg": "hello"})
-        assert result[0].text == "hello"  # type: ignore[union-attr]
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert content.text == "hello"
 
     async def test_dict_return_unchanged(self) -> None:
         mcp = AiohttpMCP()
@@ -274,7 +353,10 @@ class TestBackwardCompatibility:
             return {"key": "value"}
 
         result = await mcp.call_tool("data", {})
-        assert '"key"' in result[0].text  # type: ignore[union-attr]
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"key": "value"}
 
     async def test_list_return_unchanged(self) -> None:
         mcp = AiohttpMCP()
@@ -285,6 +367,9 @@ class TestBackwardCompatibility:
 
         result = await mcp.call_tool("items", {})
         assert len(result) == 2
+        assert all(isinstance(c, TextContent) for c in result)
+        assert result[0].text == "a"  # type: ignore[union-attr]
+        assert result[1].text == "b"  # type: ignore[union-attr]
 
     async def test_tool_returning_str_even_with_model_annotation(self) -> None:
         """If the tool has a model annotation but returns a string, it should still work."""
@@ -295,7 +380,21 @@ class TestBackwardCompatibility:
             return "raw string fallback"  # type: ignore[return-value]
 
         result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
         content = result[0]
         assert isinstance(content, TextContent)
-        # str is caught before the adapter path
         assert content.text == "raw string fallback"
+
+    async def test_tool_returning_dict_even_with_model_annotation(self) -> None:
+        """If the tool has a model annotation but returns a dict, it should still work."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserModel:
+            return {"name": "Alice", "email": "a@b.com"}  # type: ignore[return-value]
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"name": "Alice", "email": "a@b.com"}
