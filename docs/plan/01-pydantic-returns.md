@@ -44,6 +44,31 @@ async def get_user(user_id: str) -> UserResult:
     # Same: auto-serialized to JSON, outputSchema auto-generated
 ```
 
+**Note:** Structured types already work as **input** parameters (Pydantic handles this today):
+
+```python
+import dataclasses
+from pydantic import BaseModel
+
+@dataclasses.dataclass
+class UserData:
+    name: str
+    email: str
+    age: int = 25
+
+class UserResult(BaseModel):
+    id: str
+    name: str
+    email: str
+
+@mcp.tool()
+async def create_user(data: UserData) -> UserResult:
+    user = await db.create(data.name, data.email, data.age)
+    return UserResult(id=user.id, name=user.name, email=user.email)
+    # Input: dataclass validated from dict/JSON automatically (works today)
+    # Output: BaseModel auto-serialized to JSON + outputSchema generated (this feature)
+```
+
 ## Design
 
 Use Pydantic's `TypeAdapter` for both BaseModel and dataclass support:
