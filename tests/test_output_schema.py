@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -197,6 +198,26 @@ class TestOutputSchemaGeneration:
         assert tools[0].outputSchema == {
             "anyOf": [{"type": "string"}, {"type": "null"}],
         }
+
+    async def test_any_return_no_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def anything() -> Any:
+            return "whatever"
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema is None
+
+    async def test_none_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def noop() -> None:
+            pass
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema == {"type": "null"}
 
     async def test_no_return_annotation_no_output_schema(self) -> None:
         mcp = AiohttpMCP()
