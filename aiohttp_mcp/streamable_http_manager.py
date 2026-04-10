@@ -34,7 +34,7 @@ class StreamableHTTPSessionManager:
         server: MCPServer,
         event_store: EventStore | None = None,
         json_response: bool = False,
-        stateless: bool = False,
+        stateless: bool = True,
     ) -> None:
         self.server = server
         self.event_store = event_store

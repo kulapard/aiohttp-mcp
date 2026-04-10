@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - MCPServer dispatch loop tests (18 tests, 87% server.py coverage)
 
 ### Changed
+- **`stateless=True` is now the default** for `build_mcp_app()`, `setup_mcp_subapp()`, and `AppBuilder`. This is safer for multi-instance and load-balanced deployments. Use `stateless=False` to opt into stateful sessions (server push, event replay).
 - **Runtime dependencies reduced from 5+ to 3**: `aiohttp`, `aiohttp-sse`, `pydantic`
 - **Minimum Python version raised to 3.11** (for native `asyncio.TaskGroup`)
 - `build_mcp_app()` and `setup_mcp_subapp()` no longer accept `transport_mode` parameter

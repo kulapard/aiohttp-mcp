@@ -23,7 +23,7 @@ class AppBuilder:
         mcp: AiohttpMCP,
         path: str = "/mcp",
         json_response: bool = False,
-        stateless: bool = False,
+        stateless: bool = True,
     ) -> None:
         self._mcp = mcp
         self._path = path

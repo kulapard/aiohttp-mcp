@@ -49,9 +49,13 @@ The library supports two main integration patterns:
 The library uses **Streamable HTTP** transport (MCP spec 2025-11-25):
 - GET/POST/DELETE endpoints for full session lifecycle
 - SSE streaming for server-to-client messages
-- Supports both stateful (session persistence) and stateless operation modes
-- Event store support for resumability
+- Supports both stateless (default) and stateful operation modes
+- Event store support for resumability (stateful mode)
 - JSON response mode for request-response patterns
+
+**Stateless vs Stateful:**
+- **Stateless (default):** Each request creates a fresh transport. Safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses. No server-initiated push or event replay.
+- **Stateful (`stateless=False`):** Sessions persist in memory with a session ID. Enables server-initiated notifications via GET SSE stream and event replay/resumability. Requires sticky sessions if running multiple instances.
 
 **Usage:**
 ```python
@@ -59,11 +63,11 @@ from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
 mcp = AiohttpMCP()
 
-# Default (stateful)
+# Default (stateless) — safe for multi-instance deployments
 app = build_mcp_app(mcp, path="/mcp")
 
-# Stateless mode (for load-balanced deployments)
-app = build_mcp_app(mcp, path="/mcp", stateless=True)
+# Stateful mode (single instance, enables server push & resumability)
+app = build_mcp_app(mcp, path="/mcp", stateless=False)
 
 # JSON response mode (instead of SSE streaming)
 app = build_mcp_app(mcp, path="/mcp", json_response=True)

@@ -856,7 +856,7 @@ class TestSessionManagerEdgeCases:
         """Request with an unknown session ID returns 400."""
         mcp = AiohttpMCP()
         register_mcp_resources(mcp)
-        manager = StreamableHTTPSessionManager(server=mcp.server)
+        manager = StreamableHTTPSessionManager(server=mcp.server, stateless=False)
 
         request = create_mock_request(
             method="POST",

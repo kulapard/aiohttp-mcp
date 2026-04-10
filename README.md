@@ -20,7 +20,7 @@ Implements the MCP protocol natively — no heavy SDK dependencies. Only 3 runti
 - Easy integration with aiohttp web applications
 - Tool, Resource, and Prompt support with decorator-based registration
 - Shared state via `ctx.app` and per-request data via `ctx.request_context.request`
-- Stateful and stateless operation modes
+- Stateless by default, with optional stateful mode for server push and resumability
 - Event store support for resumability
 - Async-first design with full type hints
 - JSON response mode for non-streaming deployments
@@ -102,26 +102,20 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
-### Stateless Mode
+### Stateful Mode
 
-For load-balanced deployments where requests can be handled by any server instance:
+By default, the server runs in **stateless mode** — each request creates a fresh transport, making it safe for load-balanced and multi-instance deployments.
+
+For single-instance deployments that need server-initiated notifications (via GET SSE stream) or event replay/resumability, enable **stateful mode**:
 
 ```python
-from aiohttp import web
-
 from aiohttp_mcp import AiohttpMCP, build_mcp_app
 
 mcp = AiohttpMCP()
 
-
-@mcp.tool()
-def echo(message: str) -> str:
-    """Echo a message back."""
-    return message
-
-
-app = build_mcp_app(mcp, path="/mcp", stateless=True)
-web.run_app(app)
+# Stateful: sessions persist in memory, enables server push & resumability
+# Requires sticky sessions if running behind a load balancer
+app = build_mcp_app(mcp, path="/mcp", stateless=False)
 ```
 
 ### Context Access
