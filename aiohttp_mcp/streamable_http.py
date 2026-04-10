@@ -5,7 +5,6 @@ native asyncio instead of anyio.
 """
 
 import asyncio
-import json
 import logging
 import re
 from collections.abc import AsyncGenerator
@@ -212,13 +211,11 @@ class StreamableHTTPServerTransport:
                 )
 
             try:
-                raw_message = json.loads(body)
-            except json.JSONDecodeError as e:
-                return self._create_error_response(f"Parse error: {e!s}", HTTPStatus.BAD_REQUEST, PARSE_ERROR)
-
-            try:
-                message = JSONRPCMessage.model_validate(raw_message)
+                message = JSONRPCMessage.model_validate_json(body)
             except ValidationError as e:
+                is_parse_error = any(err["type"] == "json_invalid" for err in e.errors())
+                if is_parse_error:
+                    return self._create_error_response(f"Parse error: {e!s}", HTTPStatus.BAD_REQUEST, PARSE_ERROR)
                 return self._create_error_response(f"Validation error: {e!s}", HTTPStatus.BAD_REQUEST, INVALID_PARAMS)
 
             is_initialization_request = isinstance(message.root, JSONRPCRequest) and message.root.method == "initialize"
