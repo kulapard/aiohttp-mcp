@@ -1,35 +1,31 @@
 import logging
 from collections.abc import Callable, Iterable, Sequence
-from contextlib import AbstractAsyncContextManager
-from typing import Any, Literal
+from typing import Any
 
 from aiohttp import web
 from pydantic import AnyUrl
 
-from .types import (
+from .protocol.context import Context
+from .protocol.context import get_current_context as _get_current_context
+from .protocol.messages import EventStore
+from .protocol.models import (
     Annotations,
-    AnyFunction,
     Content,
-    Context,
-    EventStore,
-    FastMCP,
-    FastMCPPrompt,
-    FastMCPResource,
     GetPromptResult,
     Icon,
-    LifespanResultT,
     Prompt,
-    ReadResourceContents,
     Resource,
     ResourceTemplate,
-    Server,
+    TextResourceContents,
     Tool,
     ToolAnnotations,
 )
+from .protocol.registry import Registry, ToolError
+from .protocol.server import MCPServer
+from .protocol.typedefs import AnyFunction
 
-logger = logging.getLogger(__name__)
-
-LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+# Re-export for public API
+__all__ = ["AiohttpMCP", "ToolError"]
 
 
 class AiohttpMCP:
@@ -38,30 +34,30 @@ class AiohttpMCP:
         name: str | None = None,
         instructions: str | None = None,
         debug: bool = False,
-        log_level: LogLevel = "INFO",
         warn_on_duplicate_resources: bool = True,
         warn_on_duplicate_tools: bool = True,
         warn_on_duplicate_prompts: bool = True,
-        lifespan: Callable[[FastMCP], AbstractAsyncContextManager[LifespanResultT]] | None = None,
         event_store: EventStore | None = None,
     ) -> None:
-        self._fastmcp = FastMCP(
+        self._registry = Registry(
+            warn_on_duplicate_tools=warn_on_duplicate_tools,
+            warn_on_duplicate_resources=warn_on_duplicate_resources,
+            warn_on_duplicate_prompts=warn_on_duplicate_prompts,
+        )
+        self._server = MCPServer(
             name=name,
             instructions=instructions,
-            event_store=event_store,
-            debug=debug,
-            log_level=log_level,
-            warn_on_duplicate_resources=warn_on_duplicate_resources,
-            warn_on_duplicate_tools=warn_on_duplicate_tools,
-            warn_on_duplicate_prompts=warn_on_duplicate_prompts,
-            lifespan=lifespan,
+            registry=self._registry,
         )
         self._app: web.Application | None = None
         self._event_store = event_store
 
+        if debug:
+            logging.getLogger("aiohttp_mcp").setLevel(logging.DEBUG)
+
     @property
-    def server(self) -> Server[Any]:
-        return self._fastmcp._mcp_server
+    def server(self) -> MCPServer:
+        return self._server
 
     @property
     def event_store(self) -> EventStore | None:
@@ -86,19 +82,21 @@ class AiohttpMCP:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         icons: list[Icon] | None = None,
-        meta: dict[str, Any] | None = None,
-        structured_output: bool | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a tool."""
-        return self._fastmcp.tool(
-            name,
-            title=title,
-            description=description,
-            annotations=annotations,
-            icons=icons,
-            meta=meta,
-            structured_output=structured_output,
-        )
+
+        def decorator(fn: AnyFunction) -> AnyFunction:
+            self._registry.register_tool(
+                fn,
+                name=name,
+                title=title,
+                description=description,
+                annotations=annotations,
+                icons=icons,
+            )
+            return fn
+
+        return decorator
 
     def add_tool(
         self,
@@ -108,24 +106,20 @@ class AiohttpMCP:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         icons: list[Icon] | None = None,
-        meta: dict[str, Any] | None = None,
-        structured_output: bool | None = None,
     ) -> None:
         """Add a tool directly without using a decorator."""
-        return self._fastmcp.add_tool(
+        self._registry.register_tool(
             fn,
             name=name,
             title=title,
             description=description,
             annotations=annotations,
             icons=icons,
-            meta=meta,
-            structured_output=structured_output,
         )
 
     def remove_tool(self, name: str) -> None:
         """Remove a registered tool by name."""
-        return self._fastmcp.remove_tool(name)
+        self._registry.remove_tool(name)
 
     def resource(
         self,
@@ -139,19 +133,25 @@ class AiohttpMCP:
         annotations: Annotations | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a resource."""
-        return self._fastmcp.resource(
-            uri,
-            name=name,
-            title=title,
-            description=description,
-            mime_type=mime_type,
-            icons=icons,
-            annotations=annotations,
-        )
 
-    def add_resource(self, resource: FastMCPResource) -> None:
+        def decorator(fn: AnyFunction) -> AnyFunction:
+            self._registry.register_resource(
+                fn,
+                uri=uri,
+                name=name,
+                title=title,
+                description=description,
+                mime_type=mime_type,
+                icons=icons,
+                annotations=annotations,
+            )
+            return fn
+
+        return decorator
+
+    def add_resource(self, fn: AnyFunction, uri: str, **kwargs: Any) -> None:
         """Add a resource directly without using a decorator."""
-        return self._fastmcp.add_resource(resource)
+        self._registry.register_resource(fn, uri=uri, **kwargs)
 
     def prompt(
         self,
@@ -161,62 +161,51 @@ class AiohttpMCP:
         icons: list[Icon] | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a function as a prompt."""
-        return self._fastmcp.prompt(name, title=title, description=description, icons=icons)
 
-    def add_prompt(self, prompt: FastMCPPrompt) -> None:
+        def decorator(fn: AnyFunction) -> AnyFunction:
+            self._registry.register_prompt(
+                fn,
+                name=name,
+                title=title,
+                description=description,
+                icons=icons,
+            )
+            return fn
+
+        return decorator
+
+    def add_prompt(self, fn: AnyFunction, **kwargs: Any) -> None:
         """Add a prompt directly without using a decorator."""
-        return self._fastmcp.add_prompt(prompt)
+        self._registry.register_prompt(fn, **kwargs)
 
     async def list_tools(self) -> list[Tool]:
         """List all available tools."""
-        return await self._fastmcp.list_tools()
+        return await self._registry.list_tools()
 
     async def list_resources(self) -> list[Resource]:
         """List all available resources."""
-        return await self._fastmcp.list_resources()
+        return await self._registry.list_resources()
 
     async def list_resource_templates(self) -> list[ResourceTemplate]:
         """List all available resource templates."""
-        return await self._fastmcp.list_resource_templates()
+        return await self._registry.list_resource_templates()
 
     async def list_prompts(self) -> list[Prompt]:
         """List all available prompts."""
-        return await self._fastmcp.list_prompts()
+        return await self._registry.list_prompts()
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Sequence[Content]:
         """Call a tool by name with arguments."""
-        result = await self._fastmcp.call_tool(name, arguments)
-        # FastMCP.call_tool returns tuple (content, result_dict) for structured output support
-        if isinstance(result, tuple):
-            content_list: Sequence[Content] = result[0]
-            return content_list
-        # For backwards compatibility with older FastMCP versions
-        if isinstance(result, dict):
-            raise TypeError(f"Unexpected dict return from call_tool: {result}")
-        return result
+        return await self._registry.call_tool(name, arguments)
 
-    async def read_resource(self, uri: AnyUrl | str) -> Iterable[ReadResourceContents]:
+    async def read_resource(self, uri: AnyUrl | str) -> Iterable[TextResourceContents]:
         """Read a resource by URI."""
-        return await self._fastmcp.read_resource(uri)
+        return await self._registry.read_resource(uri)
 
     async def get_prompt(self, name: str, arguments: dict[str, Any] | None = None) -> GetPromptResult:
         """Get a prompt by name with arguments."""
-        return await self._fastmcp.get_prompt(name, arguments)
+        return await self._registry.get_prompt(name, arguments)
 
-    def get_context(self) -> Context[Any, Any, Any]:
+    def get_context(self) -> Context:
         """Get the current request context."""
-        return self._fastmcp.get_context()
-
-    def completion(self) -> Any:
-        """Decorator to register a completion handler."""
-        return self._fastmcp.completion()  # type: ignore[no-untyped-call]
-
-    def custom_route(
-        self,
-        path: str,
-        methods: list[str],
-        name: str | None = None,
-        include_in_schema: bool = True,
-    ) -> Any:
-        """Decorator to register a custom HTTP route."""
-        return self._fastmcp.custom_route(path, methods, name=name, include_in_schema=include_in_schema)
+        return _get_current_context()

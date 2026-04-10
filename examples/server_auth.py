@@ -26,7 +26,7 @@ simple_mcp = AiohttpMCP(name="Simple Auth Server", debug=True)
 )
 async def get_time_with_auth(
     timezone: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context,
 ) -> str:
     """Get the current time, including authentication info from the request.
 
@@ -35,7 +35,7 @@ async def get_time_with_auth(
         ctx: MCP context with request information
     """
     # Access the aiohttp request
-    request = ctx.request_context.request
+    request = ctx.request
 
     result = {
         "time": datetime.datetime.now(ZoneInfo(timezone)).isoformat(),
@@ -65,13 +65,13 @@ async def get_time_with_auth(
     description="Echo all HTTP headers, cookies, and request metadata for debugging",
 )
 async def echo_headers(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context,
 ) -> dict[str, object]:
     """Echo all HTTP headers from the request.
 
     Useful for debugging and understanding what headers are available.
     """
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return {"error": "No request context available"}
@@ -123,7 +123,7 @@ def validate_api_key(api_key: str) -> tuple[bool, str]:
 )
 async def secure_operation(
     data: str,
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context,
 ) -> str:
     """Perform a secure operation that requires authentication.
 
@@ -133,7 +133,7 @@ async def secure_operation(
         data: Data to process
         ctx: MCP context with request information
     """
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return "Error: No request context available"
@@ -172,10 +172,10 @@ async def secure_operation(
     description="Get information about the authenticated user from request headers",
 )
 def get_user_info(
-    ctx: Context,  # type: ignore[type-arg]
+    ctx: Context,
 ) -> dict[str, object]:
     """Get information about the authenticated user."""
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return {"error": "No request context"}
