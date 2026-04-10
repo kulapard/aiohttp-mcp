@@ -684,16 +684,16 @@ class TestAppBuilderIntegration:
     """Test integration with AppBuilder and streamable transport mode."""
 
     @pytest.fixture
-    def mcp_registry(self) -> AiohttpMCP:
+    def mcp_instance(self) -> AiohttpMCP:
         """Create an MCP registry for testing."""
         mcp = AiohttpMCP()
         register_mcp_resources(mcp)
         return mcp
 
-    async def test_app_builder_streamable_mode(self, mcp_registry: AiohttpMCP, mcp_server: MCPServer) -> None:
+    async def test_app_builder_streamable_mode(self, mcp_instance: AiohttpMCP, mcp_server: MCPServer) -> None:
         """Test AppBuilder with streamable transport mode."""
         app_builder = AppBuilder(
-            mcp=mcp_registry,
+            mcp=mcp_instance,
             path=TEST_PATH,
             json_response=False,
             stateless=False,
@@ -707,10 +707,10 @@ class TestAppBuilderIntegration:
         assert len(routes) == 1
         assert routes[0].method == "*"  # Streamable uses wildcard route
 
-    async def test_build_mcp_app_streamable_mode(self, mcp_registry: AiohttpMCP) -> None:
+    async def test_build_mcp_app_streamable_mode(self, mcp_instance: AiohttpMCP) -> None:
         """Test build_mcp_app with streamable transport mode."""
         app = build_mcp_app(
-            mcp_registry,
+            mcp_instance,
             path=TEST_PATH,
             json_response=True,
             stateless=True,
