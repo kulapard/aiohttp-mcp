@@ -123,7 +123,7 @@ app = build_mcp_app(mcp, path="/mcp", stateless=False)
 
 There are 3 ways to access the MCP context inside tools. All return the same `Context` object:
 
-**1. `get_current_context()` — module function (recommended)**
+**1. `get_current_context()` — module function**
 
 ```python
 from aiohttp_mcp import get_current_context

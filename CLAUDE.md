@@ -82,7 +82,7 @@ app = build_mcp_app(mcp, path="/mcp", json_response=True)
 
 There are 3 ways to access the MCP request context inside tools:
 
-### 1. Module function (recommended)
+### 1. Module function
 
 Call `get_current_context()` — no extra parameters needed on the tool function:
 
