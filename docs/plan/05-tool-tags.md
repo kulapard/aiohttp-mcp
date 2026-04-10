@@ -1,4 +1,4 @@
-# Feature 6: Tool Tags + Bulk Configuration
+# Feature 5: Tool Tags + Bulk Configuration
 
 ## Problem
 
@@ -97,4 +97,4 @@ No new exports needed (tags are a parameter, not a type).
 
 ## Related
 
-- [Feature 5 (McpGroup)](05-mcp-group.md) — groups auto-apply tags to all their tools, making groups the primary organizational unit and tags secondary metadata
+- [Feature 4 (McpGroup)](04-mcp-group.md) — groups auto-apply tags to all their tools, making groups the primary organizational unit and tags secondary metadata

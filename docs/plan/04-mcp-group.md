@@ -1,10 +1,10 @@
-# Feature 5: McpGroup — Blueprint for MCP Primitives
+# Feature 4: McpGroup — Blueprint for MCP Primitives
 
 ## Problem
 
 Large MCP servers have many tools/resources/prompts with no organizational structure. Related primitives can't share a name prefix, middleware, tags, or annotations without repeating configuration on each one.
 
-This feature subsumes [Feature 6 (Tool Tags)](06-tool-tags.md) — groups provide a more natural organizational unit than flat tags, while tags can still exist as metadata within a group.
+This feature subsumes [Feature 5 (Tool Tags)](05-tool-tags.md) — groups provide a more natural organizational unit than flat tags, while tags can still exist as metadata within a group.
 
 ## Before
 
@@ -208,7 +208,7 @@ Export `McpGroup`.
 ### Related features
 
 - [Feature 3 (Middleware)](03-tool-middleware.md) — group-scoped middleware builds on the global middleware system
-- [Feature 6 (Tags)](06-tool-tags.md) — tags can be auto-applied via group config; groups are the primary organizational unit, tags are secondary metadata
+- [Feature 5 (Tags)](05-tool-tags.md) — tags can be auto-applied via group config; groups are the primary organizational unit, tags are secondary metadata
 
 ## Complexity
 
