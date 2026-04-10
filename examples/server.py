@@ -9,7 +9,7 @@ mcp = AiohttpMCP(debug=False)
 
 
 @mcp.tool()
-def get_time(timezone: str) -> str:
+def get_time(timezone: str = "Europe/Madrid") -> str:
     """Get the current time in the specified timezone."""
     tz = ZoneInfo(timezone)
     return datetime.datetime.now(tz).isoformat()

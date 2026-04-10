@@ -1,0 +1,270 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Development Commands
+
+- **Run tests**: `uv run pytest` (with coverage reporting configured)
+- **Lint code**: `make lint` (runs pre-commit hooks, mypy, and ty)
+- **Type checking**: `uv run mypy .`
+- **Build package**: `uv build`
+- **Clean artifacts**: `make clean`
+- **Install dependencies**: `uv sync --all-extras`
+
+**Before every commit**, run `make lint` to ensure code passes ruff and mypy strict checks. Do not commit code that fails linting.
+
+## Architecture Overview
+
+This is a Python library (requires Python 3.11+) that provides Model Context Protocol (MCP) server functionality built on top of aiohttp. It implements the MCP protocol natively without depending on the `mcp` SDK at runtime.
+
+### Runtime Dependencies
+
+Only 3 runtime dependencies: `aiohttp`, `aiohttp-sse`, `pydantic`
+
+### Key Components
+
+- **AiohttpMCP** (`aiohttp_mcp/core.py`): Main class providing decorators for registering tools, resources, and prompts. Uses a native `Registry` and `MCPServer` internally.
+- **AppBuilder** (`aiohttp_mcp/app.py`): Builds aiohttp applications with MCP server capabilities (Streamable HTTP transport), supporting both standalone apps and sub-applications.
+- **Native Protocol Layer** (`aiohttp_mcp/protocol/`): Complete MCP protocol implementation:
+  - `models.py` — MCP Pydantic models (JSON-RPC, Tool, Resource, Prompt, Content types) targeting MCP spec 2025-11-25
+  - `versions.py` — Per-version response models for backward compatibility (2025-03-26, 2025-06-18); older clients get responses with only the fields their spec version defines
+  - `server.py` — `MCPServer` JSON-RPC dispatch engine (handles initialize, ping, tools/*, resources/*, prompts/*) with version-aware serialization
+  - `registry.py` — Tool/Resource/Prompt registration, execution, and URI template matching
+  - `func_metadata.py` — Function introspection for generating JSON Schema from type hints via pydantic
+  - `context.py` — Context system with `contextvars` propagation for request/lifespan context
+  - `streams.py` — asyncio.Queue-based memory streams (replacing anyio)
+  - `messages.py` — SessionMessage, EventMessage, EventStore types
+- **StreamableHTTPServerTransport** (`aiohttp_mcp/streamable_http.py`): Streamable HTTP transport with SSE streaming, session management, and resumability
+- **StreamableHTTPSessionManager** (`aiohttp_mcp/streamable_http_manager.py`): Session orchestrator supporting stateful and stateless modes
+- **Discovery utilities** (`aiohttp_mcp/utils/discover.py`): Module discovery for finding decorated MCP functions
+
+### Integration Patterns
+
+The library supports two main integration patterns:
+1. **Standalone MCP server**: Using `build_mcp_app()` to create a complete aiohttp application
+2. **Sub-application**: Using `setup_mcp_subapp()` to integrate MCP functionality into existing aiohttp applications
+
+### Transport
+
+The library uses **Streamable HTTP** transport (MCP spec 2025-11-25):
+- GET/POST/DELETE endpoints for full session lifecycle
+- SSE streaming for server-to-client messages
+- Supports both stateless (default) and stateful operation modes
+- Event store support for resumability (stateful mode)
+- JSON response mode for request-response patterns
+
+**Stateless vs Stateful:**
+- **Stateless (default):** Each request creates a fresh transport. Safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses. No server-initiated push or event replay. `event_store` is ignored.
+- **Stateful (`stateless=False`):** Sessions persist in memory on a single process. Enables server-initiated notifications via GET SSE stream and event replay/resumability via `event_store`. **Not suitable for multi-instance deployments** — session state and event store are in-process only. Requires sticky sessions behind a load balancer.
+
+**Event Store and Resumability:**
+
+The `event_store` parameter enables SSE resumability in stateful mode. When a client's SSE connection drops, it can reconnect with `Last-Event-ID` header and the server replays missed events. The built-in `InMemoryEventStore` stores events in a Python dict — it only works within a single process. For multi-instance stateful deployments, you would need a custom `EventStore` implementation backed by shared storage (e.g., Redis) plus sticky sessions. In stateless mode, `event_store` is always set to `None` regardless of what is passed.
+
+**Usage:**
+```python
+from aiohttp_mcp import AiohttpMCP, InMemoryEventStore, build_mcp_app
+
+mcp = AiohttpMCP()
+
+# Default (stateless) — safe for multi-instance deployments
+app = build_mcp_app(mcp, path="/mcp")
+
+# Stateful mode with resumability (single instance only)
+mcp = AiohttpMCP(event_store=InMemoryEventStore())
+app = build_mcp_app(mcp, path="/mcp", stateless=False)
+
+# JSON response mode (instead of SSE streaming)
+app = build_mcp_app(mcp, path="/mcp", json_response=True)
+```
+
+## Context Access
+
+There are 3 ways to access the MCP request context inside tools:
+
+### 1. Module function
+
+Call `get_current_context()` — no extra parameters needed on the tool function:
+
+```python
+from aiohttp_mcp import get_current_context
+
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = get_current_context()
+    user = ctx.request.headers.get("X-User-ID")
+    await ctx.info(f"Query from {user}: {query}")
+    return f"Result for {user}"
+```
+
+### 2. Instance method
+
+Call `mcp.get_context()` on the AiohttpMCP instance (requires access to `mcp`):
+
+```python
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = mcp.get_context()
+    user = ctx.request.headers.get("X-User-ID")
+    return f"Result for {user}"
+```
+
+### 3. Explicit parameter
+
+Declare `ctx: Context` as a parameter — it's auto-injected and excluded from the tool's input schema:
+
+```python
+from aiohttp_mcp import Context
+
+@mcp.tool()
+async def my_tool(query: str, ctx: Context) -> str:
+    user = ctx.request.headers.get("X-User-ID")
+    return f"Result for {user}"
+```
+
+### Context capabilities
+
+All approaches give access to the same `Context` object:
+
+- `ctx.request_id` — JSON-RPC request ID
+- `ctx.app` — aiohttp `Application` for shared state (`ctx.app["db_pool"]`)
+- `ctx.request` — aiohttp `Request` (headers, cookies, IP)
+- `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
+- `await ctx.report_progress(progress, total)` — report progress to client
+- `await ctx.read_resource(uri)` — read a registered resource
+
+### Resource Composition (Tool → Resource)
+
+`ctx.read_resource(uri)` lets a tool read a registered resource during execution. This avoids duplicating resource logic inside tools — instead, tools call back into the registry using the same URI that clients use via `resources/read`.
+
+```python
+@mcp.resource("config://{service}")
+async def get_config(service: str) -> str:
+    """Service configuration exposed as a resource."""
+    return load_config(service)
+
+@mcp.tool()
+async def deploy(service: str) -> str:
+    """Deploy a service using its registered config."""
+    ctx = get_current_context()
+    config = await ctx.read_resource(f"config://{service}")
+    return f"Deployed {service} with {config}"
+```
+
+**Why not just call the function directly?** Because resource functions may be registered dynamically, discovered at import time, or live in separate modules. `read_resource` decouples tools from resource implementations — tools only need the URI, not a reference to the function. It also supports URI template matching (e.g., `config://{service}`), which plain function calls cannot leverage.
+
+**Note:** `read_resource` is only available inside a server request. Calling it outside raises `RuntimeError`.
+
+## Context Patterns
+
+### Shared State via `ctx.app`
+
+Store shared resources (database pools, API clients, config) on the aiohttp Application using `app.cleanup_ctx` for lifecycle management:
+
+```python
+from collections.abc import AsyncIterator
+from aiohttp import web
+from aiohttp_mcp import AiohttpMCP, build_mcp_app, get_current_context
+
+mcp = AiohttpMCP()
+
+@mcp.tool()
+async def query_db(sql: str) -> str:
+    ctx = get_current_context()
+    db_pool = ctx.app["db_pool"]
+    return await db_pool.query(sql)
+
+async def startup(app: web.Application) -> AsyncIterator[None]:
+    app["db_pool"] = await create_db_pool("postgresql://localhost/mydb")
+    yield
+    await app["db_pool"].close()
+
+app = build_mcp_app(mcp, path="/mcp")
+app.cleanup_ctx.append(startup)
+```
+
+### Request Context (Per-Request Data)
+
+Access HTTP request data (headers, auth, cookies, client IP) in tools via the `Context` parameter:
+
+```python
+@mcp.tool()
+async def secure_operation(data: str, ctx: Context) -> str:
+    # Access the aiohttp Request object
+    request = ctx.request
+
+    if not request:
+        return "No request context"
+
+    # Access headers (auth tokens, identity, etc.)
+    auth_token = request.headers.get("Authorization", "")
+    user_id = request.headers.get("X-User-ID", "anonymous")
+    api_key = request.headers.get("X-API-Key", "")
+
+    # Access cookies
+    session = request.cookies.get("session")
+
+    # Access client IP
+    client_ip = request.remote
+
+    # Use auth info in your logic
+    if not auth_token.startswith("Bearer "):
+        return "Authentication required"
+
+    return f"Processing for user {user_id} from {client_ip}"
+```
+
+**Available from `ctx.request`:**
+- Headers: `request.headers.get("Header-Name")`
+- Cookies: `request.cookies.get("cookie_name")`
+- Client IP: `request.remote`
+- Query params: `request.query`
+- Path, method, URL: `request.path`, `request.method`, `request.url`
+
+**Authentication Middleware Pattern:**
+
+For enforcing authentication before MCP processing:
+
+```python
+from aiohttp_mcp import AppBuilder
+
+mcp = AiohttpMCP()
+app_builder = AppBuilder(mcp=mcp, path="/mcp")
+
+async def authenticated_handler(request):
+    # Validate auth before processing
+    if not is_valid_token(request.headers.get("Authorization", "")):
+        return web.Response(text="Unauthorized", status=401)
+
+    # Pass to MCP handler
+    return await app_builder.streamable_http_handler(request)
+```
+
+See `examples/server_context.py` for a complete example showing shared state via `ctx.app` and per-request context together.
+
+## Examples
+
+- `examples/server.py` - Basic MCP server with simple tools
+- `examples/server_auth.py` - Authentication patterns and request context access
+- `examples/server_context.py` - Shared app state and request context usage
+- `examples/server_custom.py` - Custom handlers and advanced patterns
+
+## Testing
+
+- Tests are located in the `tests/` directory
+- Uses pytest-asyncio with `asyncio_mode = "auto"` (configured in pyproject.toml)
+- Coverage reporting configured for branch coverage
+- Test utilities are in `tests/utils.py`
+- Run individual test files: `uv run pytest tests/test_<module>.py`
+- `mcp` package is a dev dependency used only for E2E test client (`mcp.ClientSession`)
+
+## Documentation Policy
+
+When making meaningful code changes (new features, API changes, bug fixes, dependency changes, removed/added modules), you **must** update the relevant documentation in the same commit or PR:
+
+- **`CHANGELOG.md`** — Add an entry under `[Unreleased]` describing the change
+- **`README.md`** — Update if the change affects public API, usage examples, installation, or requirements
+- **`docs/`** — Update any relevant design documents if architecture changes
+- **`CLAUDE.md`** — Update if the change affects development workflow, architecture, or project conventions
+
+Do not defer documentation to a follow-up task. Code and docs ship together.

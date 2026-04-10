@@ -64,10 +64,13 @@ cov-dev:
 	@open -n "file://`pwd`/htmlcov/index.html"
 
 # Run linting
-lint: pre-commit mypy
+lint: pre-commit mypy ty
 
 mypy:
 	uv run mypy .
+
+ty:
+	uvx ty check
 
 pre-commit:
 	uv run pre-commit run --all-files
@@ -94,9 +97,11 @@ help:
 	@echo ""
 	@echo "Example runners:"
 	@echo "  make run-server              - Run basic MCP server"
-	@echo "  make run-server-custom       - Run custom MCP server"
-	@echo "  make run-server-subapp       - Run MCP sub-application server"
-	@echo "  make run-server-streamable   - Run Streamable HTTP MCP server"
+	@echo "  make run-server              - Run basic MCP server"
+	@echo "  make run-server-auth         - Run auth example server"
+	@echo "  make run-server-context      - Run context example server"
+	@echo "  make run-server-custom       - Run custom handler server"
+	@echo "  make run-server-subapp       - Run sub-application server"
 	@echo "  make run-client              - Run MCP client"
 	@echo "  make run-inspector           - Run MCP inspector"
 
@@ -109,11 +114,14 @@ run-client:
 run-server:
 	uv run examples/server.py
 
+run-server-auth:
+	uv run examples/server_auth.py
+
+run-server-context:
+	uv run examples/server_context.py
+
 run-server-custom:
 	uv run examples/server_custom.py
 
 run-server-subapp:
 	uv run examples/server_subapp.py
-
-run-server-streamable:
-	uv run examples/server_streamable_http.py
