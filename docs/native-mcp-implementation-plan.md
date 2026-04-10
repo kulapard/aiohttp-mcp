@@ -64,14 +64,14 @@ All types needed for the MCP protocol:
 - **Misc**: `AnyFunction` type alias
 
 #### 1.4 `protocol/messages.py` - Session/event message types
-- `ServerMessageMetadata` dataclass (related_request_id, request_context)
+- `ServerMessageMetadata` dataclass (related_request_id, request)
 - `SessionMessage` dataclass (message: JSONRPCMessage, metadata)
 - `EventMessage` dataclass (message: JSONRPCMessage, event_id: str | None)
 - `EventStore` abstract class (store_event, replay_events_after)
 
 #### 1.5 `protocol/context.py` - Context system
-- `RequestContext` dataclass preserving `request` (aiohttp Request) and `lifespan_context` access
-- `Context[ServerT, LifespanT, RequestT]` class with `request_context` property
+- `RequestContext` dataclass (request_id, request)
+- `Context` class with `request`, `request_id`, `app` properties
 - `_current_context: ContextVar` for propagation
 - `find_context_kwarg(fn)` utility to detect Context params in function signatures
 

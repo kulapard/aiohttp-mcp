@@ -29,7 +29,7 @@ class TestDirectToolCalls:
         async def echo_with_context(message: str, ctx: Context) -> str:
             """Echo message with context info."""
             try:
-                request = ctx.request_context.request
+                request = ctx.request
                 if request:
                     user = str(request.headers.get("X-User-ID", "unknown"))
                     return f"{message} (from user: {user})"
@@ -67,7 +67,7 @@ class TestRequestContextAccess:
         @mcp.tool()
         async def get_request_headers(ctx: Context) -> dict[str, object]:
             """Get all HTTP headers from the request."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return {"error": "No request context"}
 
@@ -82,7 +82,7 @@ class TestRequestContextAccess:
         @mcp.tool()
         async def get_auth_header(ctx: Context) -> str:
             """Get the Authorization header from the request."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return "No request context"
 
@@ -91,7 +91,7 @@ class TestRequestContextAccess:
         @mcp.tool()
         async def get_user_id(ctx: Context) -> str:
             """Get the X-User-ID header from the request."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return "anonymous"
 
@@ -100,7 +100,7 @@ class TestRequestContextAccess:
         @mcp.tool()
         async def get_client_ip(ctx: Context) -> str:
             """Get the client IP address."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return "unknown"
 
@@ -109,7 +109,7 @@ class TestRequestContextAccess:
         @mcp.tool()
         async def check_cookie(cookie_name: str, ctx: Context) -> dict[str, object]:
             """Check if a specific cookie exists."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return {"error": "No request context"}
 
@@ -231,7 +231,7 @@ class TestAppContextAccess:
         @mcp.tool()
         async def get_app_state(ctx: Context) -> dict[str, object]:
             """Get shared state from app and request data."""
-            request = ctx.request_context.request
+            request = ctx.request
             user_id = "anonymous"
             auth_header = "none"
 
@@ -280,7 +280,7 @@ class TestAuthenticationPatterns:
         @mcp.tool()
         async def secure_operation(data: str, ctx: Context) -> str:
             """Tool that validates authentication."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return "Error: No request context"
 
@@ -353,7 +353,7 @@ class TestEdgeCases:
         @mcp.tool()
         async def handle_missing_context(ctx: Context) -> str:
             """Tool that handles missing request context."""
-            request = ctx.request_context.request
+            request = ctx.request
             if request is None:
                 return "Request context is None (expected in some scenarios)"
             return "Request context available"
@@ -361,7 +361,7 @@ class TestEdgeCases:
         @mcp.tool()
         async def handle_empty_headers(ctx: Context) -> dict[str, object]:
             """Tool that handles empty headers."""
-            request = ctx.request_context.request
+            request = ctx.request
             if not request:
                 return {"error": "No request"}
 
@@ -416,7 +416,7 @@ class TestRequestContextDataVerification:
         async def verify_headers(ctx: Context) -> dict[str, object]:
             """Return all headers for verification."""
             try:
-                request = ctx.request_context.request
+                request = ctx.request
                 if not request:
                     return {"error": "No request"}
 
@@ -434,7 +434,7 @@ class TestRequestContextDataVerification:
         async def verify_cookies(ctx: Context) -> dict[str, object]:
             """Return cookies for verification."""
             try:
-                request = ctx.request_context.request
+                request = ctx.request
                 if not request:
                     return {"error": "No request"}
 

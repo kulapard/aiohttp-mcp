@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tool, Resource, and Prompt registries with decorator-based registration
   - Function introspection for automatic JSON Schema generation from type hints
   - asyncio-based memory streams replacing anyio streams
-  - Context system with `contextvars` propagation (`ctx.app`, `ctx.request_context.request`)
+  - Context system with `contextvars` propagation (`ctx.app`, `ctx.request`)
 - MCP protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26` supported
   - Version negotiation during initialize handshake
   - Per-version response models that exclude fields absent in older specs

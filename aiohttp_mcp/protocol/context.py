@@ -50,8 +50,9 @@ class Context:
         self._read_resource = read_resource
 
     @property
-    def request_context(self) -> RequestContext:
-        return self._request_context
+    def request(self) -> Request | None:
+        """The aiohttp Request for the current call, or None if unavailable."""
+        return self._request_context.request
 
     @property
     def request_id(self) -> str | int | None:

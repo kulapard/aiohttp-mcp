@@ -35,7 +35,7 @@ async def get_time_with_auth(
         ctx: MCP context with request information
     """
     # Access the aiohttp request
-    request = ctx.request_context.request
+    request = ctx.request
 
     result = {
         "time": datetime.datetime.now(ZoneInfo(timezone)).isoformat(),
@@ -71,7 +71,7 @@ async def echo_headers(
 
     Useful for debugging and understanding what headers are available.
     """
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return {"error": "No request context available"}
@@ -133,7 +133,7 @@ async def secure_operation(
         data: Data to process
         ctx: MCP context with request information
     """
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return "Error: No request context available"
@@ -175,7 +175,7 @@ def get_user_info(
     ctx: Context,
 ) -> dict[str, object]:
     """Get information about the authenticated user."""
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return {"error": "No request context"}

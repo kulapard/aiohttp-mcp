@@ -92,7 +92,7 @@ from aiohttp_mcp import get_current_context
 @mcp.tool()
 async def my_tool(query: str) -> str:
     ctx = get_current_context()
-    user = ctx.request_context.request.headers.get("X-User-ID")
+    user = ctx.request.headers.get("X-User-ID")
     await ctx.info(f"Query from {user}: {query}")
     return f"Result for {user}"
 ```
@@ -105,7 +105,7 @@ Call `mcp.get_context()` on the AiohttpMCP instance (requires access to `mcp`):
 @mcp.tool()
 async def my_tool(query: str) -> str:
     ctx = mcp.get_context()
-    user = ctx.request_context.request.headers.get("X-User-ID")
+    user = ctx.request.headers.get("X-User-ID")
     return f"Result for {user}"
 ```
 
@@ -118,7 +118,7 @@ from aiohttp_mcp import Context
 
 @mcp.tool()
 async def my_tool(query: str, ctx: Context) -> str:
-    user = ctx.request_context.request.headers.get("X-User-ID")
+    user = ctx.request.headers.get("X-User-ID")
     return f"Result for {user}"
 ```
 
@@ -128,7 +128,7 @@ All approaches give access to the same `Context` object:
 
 - `ctx.request_id` — JSON-RPC request ID
 - `ctx.app` — aiohttp `Application` for shared state (`ctx.app["db_pool"]`)
-- `ctx.request_context.request` — aiohttp `Request` (headers, cookies, IP)
+- `ctx.request` — aiohttp `Request` (headers, cookies, IP)
 - `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
 - `await ctx.report_progress(progress, total)` — report progress to client
 - `await ctx.read_resource(uri)` — read a registered resource
@@ -191,7 +191,7 @@ Access HTTP request data (headers, auth, cookies, client IP) in tools via the `C
 @mcp.tool()
 async def secure_operation(data: str, ctx: Context) -> str:
     # Access the aiohttp Request object
-    request = ctx.request_context.request
+    request = ctx.request
 
     if not request:
         return "No request context"
@@ -214,7 +214,7 @@ async def secure_operation(data: str, ctx: Context) -> str:
     return f"Processing for user {user_id} from {client_ip}"
 ```
 
-**Available from `ctx.request_context.request`:**
+**Available from `ctx.request`:**
 - Headers: `request.headers.get("Header-Name")`
 - Cookies: `request.cookies.get("cookie_name")`
 - Client IP: `request.remote`

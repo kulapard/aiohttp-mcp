@@ -84,7 +84,7 @@ mcp = AiohttpMCP(name="Context Demo Server", debug=True)
 def get_user_id() -> str:
     """Extract user ID from request headers."""
     ctx = get_current_context()
-    request = ctx.request_context.request
+    request = ctx.request
     if not request:
         return "anonymous"
     user_id = request.headers.get("X-User-ID")
@@ -108,7 +108,7 @@ async def query_database(sql: str) -> str:
     ctx = get_current_context()
     db_pool: DatabasePool = ctx.app["db_pool"]
     user_id = get_user_id()
-    request = ctx.request_context.request
+    request = ctx.request
     client_ip = request.remote if request else "unknown"
 
     await ctx.info(f"Database query by user '{user_id}' from {client_ip}: {sql}")
@@ -195,7 +195,7 @@ def get_context_info() -> dict[str, Any]:
         },
     }
 
-    request = ctx.request_context.request
+    request = ctx.request
     if request:
         result["request_context"] = {
             "client_ip": request.remote,

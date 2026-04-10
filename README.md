@@ -19,7 +19,7 @@ Implements the MCP protocol natively — no heavy SDK dependencies. Only 3 runti
 - Streamable HTTP transport with SSE streaming
 - Easy integration with aiohttp web applications
 - Tool, Resource, and Prompt support with decorator-based registration
-- Shared state via `ctx.app` and per-request data via `ctx.request_context.request`
+- Shared state via `ctx.app` and per-request data via `ctx.request`
 - Stateless by default, with optional stateful mode for server push and resumability
 - Event store support for resumability
 - Async-first design with full type hints
@@ -121,7 +121,7 @@ app = build_mcp_app(mcp, path="/mcp", stateless=False)
 
 ### Context Access
 
-Tools access shared state via `ctx.app` and HTTP request data via `ctx.request_context.request`:
+Tools access shared state via `ctx.app` and HTTP request data via `ctx.request`:
 
 ```python
 from collections.abc import AsyncIterator
@@ -139,7 +139,7 @@ async def secure_query(sql: str) -> str:
     ctx = get_current_context()
 
     # Access HTTP request (headers, cookies, client IP)
-    user_id = ctx.request_context.request.headers.get("X-User-ID", "anonymous")
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
 
     # Access shared resources from aiohttp app
     db_pool = ctx.app["db_pool"]
