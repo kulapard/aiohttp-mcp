@@ -94,7 +94,7 @@ class TestOutputSchemaGeneration:
         assert "user" in schema["properties"]
         assert "$defs" in schema or "definitions" in schema or "$ref" in schema["properties"]["user"]
 
-    async def test_str_return_no_output_schema(self) -> None:
+    async def test_str_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
 
         @mcp.tool()
@@ -102,17 +102,63 @@ class TestOutputSchemaGeneration:
             return msg
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is None
+        assert tools[0].outputSchema is not None
+        assert tools[0].outputSchema["type"] == "string"
 
-    async def test_dict_return_no_output_schema(self) -> None:
+    async def test_int_return_generates_output_schema(self) -> None:
         mcp = AiohttpMCP()
 
         @mcp.tool()
-        def echo() -> dict[str, str]:
-            return {"key": "value"}
+        def count() -> int:
+            return 42
 
         tools = await mcp.list_tools()
-        assert tools[0].outputSchema is None
+        assert tools[0].outputSchema is not None
+        assert tools[0].outputSchema["type"] == "integer"
+
+    async def test_bool_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def check() -> bool:
+            return True
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema is not None
+        assert tools[0].outputSchema["type"] == "boolean"
+
+    async def test_list_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def items() -> list[str]:
+            return ["a", "b"]
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema is not None
+        assert tools[0].outputSchema["type"] == "array"
+
+    async def test_dict_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def data() -> dict[str, int]:
+            return {"key": 1}
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema is not None
+        assert tools[0].outputSchema["type"] == "object"
+
+    async def test_optional_return_generates_output_schema(self) -> None:
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def maybe() -> str | None:
+            return None
+
+        tools = await mcp.list_tools()
+        assert tools[0].outputSchema is not None
+        assert "anyOf" in tools[0].outputSchema
 
     async def test_no_return_annotation_no_output_schema(self) -> None:
         mcp = AiohttpMCP()

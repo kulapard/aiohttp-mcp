@@ -445,23 +445,35 @@ class Registry:
 
 
 def _build_output_adapter(fn: Callable[..., Any]) -> tuple[dict[str, Any] | None, TypeAdapter[Any] | None]:
-    """Inspect a function's return annotation and build a TypeAdapter if it's a BaseModel or dataclass."""
+    """Inspect a function's return annotation and build outputSchema + TypeAdapter.
+
+    Returns (output_schema, output_adapter) where:
+    - output_schema is generated for any return annotation (str, int, BaseModel, dataclass, etc.)
+    - output_adapter is only set for structured types (BaseModel, dataclass) that need
+      special serialization via TypeAdapter.dump_json()
+    """
     try:
         sig = inspect.signature(fn, eval_str=True)
     except (ValueError, TypeError):
         return None, None
 
     annotation = sig.return_annotation
-    if annotation is inspect.Parameter.empty:
+    if annotation is inspect.Parameter.empty or annotation is Any:
         return None, None
 
+    try:
+        adapter = TypeAdapter(annotation)
+        schema = adapter.json_schema()
+    except Exception:
+        return None, None
+
+    # Only use adapter for serialization of structured types (BaseModel, dataclass).
+    # Simple types (str, int, dict, list) are already handled by _convert_to_content.
     is_model = isinstance(annotation, type) and issubclass(annotation, BaseModel)
     is_dc = _dataclasses_module.is_dataclass(annotation) and isinstance(annotation, type)
-    if not (is_model or is_dc):
-        return None, None
+    serialization_adapter = adapter if (is_model or is_dc) else None
 
-    adapter = TypeAdapter(annotation)
-    return adapter.json_schema(), adapter
+    return schema, serialization_adapter
 
 
 _CONTENT_TYPES = (TextContent, ImageContent, AudioContent, EmbeddedResource, ResourceLink)
