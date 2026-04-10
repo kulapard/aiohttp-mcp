@@ -398,3 +398,73 @@ class TestBackwardCompatibility:
         content = result[0]
         assert isinstance(content, TextContent)
         assert json.loads(content.text) == {"name": "Alice", "email": "a@b.com"}
+
+    async def test_optional_basemodel_return_serialized(self) -> None:
+        """Optional[BaseModel] should serialize the model to JSON, not str() repr."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserModel | None:
+            return UserModel(name="Alice", email="a@b.com")
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"name": "Alice", "email": "a@b.com"}
+
+    async def test_optional_basemodel_return_none(self) -> None:
+        """Optional[BaseModel] returning None should work."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserModel | None:
+            return None
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert content.text == "None"
+
+    async def test_optional_dataclass_return_serialized(self) -> None:
+        """Optional[dataclass] should serialize the dataclass to JSON."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserDC | None:
+            return UserDC(name="Bob", email="b@b.com")
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert json.loads(content.text) == {"name": "Bob", "email": "b@b.com"}
+
+    async def test_list_basemodel_return_serialized(self) -> None:
+        """list[BaseModel] should serialize each model to JSON."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_users() -> list[UserModel]:
+            return [UserModel(name="Alice", email="a@b.com"), UserModel(name="Bob", email="b@b.com")]
+
+        result = await mcp.call_tool("get_users", {})
+        assert len(result) == 2
+        assert all(isinstance(c, TextContent) for c in result)
+        assert json.loads(result[0].text) == {"name": "Alice", "email": "a@b.com"}  # type: ignore[union-attr]
+        assert json.loads(result[1].text) == {"name": "Bob", "email": "b@b.com"}  # type: ignore[union-attr]
+
+    async def test_tool_returning_content_type_with_model_annotation(self) -> None:
+        """If the tool has a model annotation but returns a Content type, it should pass through."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserModel:
+            return TextContent(text="custom")  # type: ignore[return-value]
+
+        result = await mcp.call_tool("get_user", {})
+        assert len(result) == 1
+        content = result[0]
+        assert isinstance(content, TextContent)
+        assert content.text == "custom"

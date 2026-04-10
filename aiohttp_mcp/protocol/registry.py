@@ -497,5 +497,9 @@ def _single_to_content(item: Any) -> Content:
         return TextContent(text=item)
     if isinstance(item, dict):
         return TextContent(text=_json_module.dumps(item))
+    if isinstance(item, BaseModel):
+        return TextContent(text=item.model_dump_json())
+    if _dataclasses_module.is_dataclass(item) and not isinstance(item, type):
+        return TextContent(text=TypeAdapter(type(item)).dump_json(item).decode())
 
     return TextContent(text=str(item))
