@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `build_mcp_app()` and `setup_mcp_subapp()` now default to `stateless=True`, matching `AppBuilder` and documented behavior
+
 ### Added
 - Native MCP protocol implementation (`aiohttp_mcp/protocol/`) replacing the `mcp` SDK dependency
   - JSON-RPC 2.0 dispatch engine with full MCP method support
