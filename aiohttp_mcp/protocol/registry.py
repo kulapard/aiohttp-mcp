@@ -234,7 +234,10 @@ class Registry:
             raise ToolError(str(e)) from e
 
         if td.output_adapter is not None and not isinstance(result, (str, dict, list, *_CONTENT_TYPES)):
-            json_bytes = td.output_adapter.dump_json(result)
+            try:
+                json_bytes = td.output_adapter.dump_json(result)
+            except Exception as e:
+                raise ToolError(f"Failed to serialize tool output: {e}") from e
             return [TextContent(text=json_bytes.decode())]
 
         return _convert_to_content(result)
