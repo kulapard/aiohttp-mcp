@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Structured return types**: Tools can now return Pydantic `BaseModel` or `dataclass` instances — they are automatically serialized to JSON via `TypeAdapter.dump_json()` instead of `str()`
+- **`outputSchema` generation**: Tools with `BaseModel` or `dataclass` return type annotations automatically populate `outputSchema` in `tools/list` responses (supported in MCP protocol 2025-06-18+)
+
 ### Fixed
 - `build_mcp_app()` and `setup_mcp_subapp()` now default to `stateless=True`, matching `AppBuilder` and documented behavior
+- Tools returning Pydantic models no longer produce ugly `str()` repr — they are serialized as proper JSON
 
 ### Added
 - Native MCP protocol implementation (`aiohttp_mcp/protocol/`) replacing the `mcp` SDK dependency

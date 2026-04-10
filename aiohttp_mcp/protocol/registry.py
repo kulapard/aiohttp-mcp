@@ -4,6 +4,7 @@ Manages registration, listing, and execution of MCP primitives.
 Replaces FastMCP's internal tool/resource/prompt management.
 """
 
+import dataclasses as _dataclasses_module
 import inspect
 import json as _json_module
 import logging
@@ -12,7 +13,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import AnyUrl
+from pydantic import AnyUrl, BaseModel, TypeAdapter
 
 from .context import Context, find_context_kwarg, get_current_context
 from .func_metadata import FuncMetadata, func_metadata
@@ -60,6 +61,8 @@ class ToolDef:
     context_kwarg: str | None
     annotations: ToolAnnotations | None = None
     icons: list[Icon] | None = None
+    output_schema: dict[str, Any] | None = None
+    output_adapter: TypeAdapter[Any] | None = None
 
 
 @dataclass
@@ -167,6 +170,8 @@ class Registry:
         meta_obj = func_metadata(fn, skip_names=skip_names)
         is_async = inspect.iscoroutinefunction(fn)
 
+        output_schema, output_adapter = _build_output_adapter(fn)
+
         self._tools[tool_name] = ToolDef(
             fn=fn,
             name=tool_name,
@@ -177,6 +182,8 @@ class Registry:
             context_kwarg=ctx_kwarg,
             annotations=annotations,
             icons=icons,
+            output_schema=output_schema,
+            output_adapter=output_adapter,
         )
 
     def remove_tool(self, name: str) -> None:
@@ -194,6 +201,7 @@ class Registry:
                     title=td.title,
                     description=td.description,
                     inputSchema=schema,
+                    outputSchema=td.output_schema,
                     icons=td.icons,
                     annotations=td.annotations,
                 )
@@ -224,6 +232,10 @@ class Registry:
             raise
         except Exception as e:
             raise ToolError(str(e)) from e
+
+        if td.output_adapter is not None and not isinstance(result, (str, dict, list, *_CONTENT_TYPES)):
+            json_bytes = td.output_adapter.dump_json(result)
+            return [TextContent(text=json_bytes.decode())]
 
         return _convert_to_content(result)
 
@@ -430,6 +442,26 @@ class Registry:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _build_output_adapter(fn: Callable[..., Any]) -> tuple[dict[str, Any] | None, TypeAdapter[Any] | None]:
+    """Inspect a function's return annotation and build a TypeAdapter if it's a BaseModel or dataclass."""
+    try:
+        sig = inspect.signature(fn, eval_str=True)
+    except (ValueError, TypeError):
+        return None, None
+
+    annotation = sig.return_annotation
+    if annotation is inspect.Parameter.empty:
+        return None, None
+
+    is_model = isinstance(annotation, type) and issubclass(annotation, BaseModel)
+    is_dc = _dataclasses_module.is_dataclass(annotation) and isinstance(annotation, type)
+    if not (is_model or is_dc):
+        return None, None
+
+    adapter = TypeAdapter(annotation)
+    return adapter.json_schema(), adapter
 
 
 _CONTENT_TYPES = (TextContent, ImageContent, AudioContent, EmbeddedResource, ResourceLink)

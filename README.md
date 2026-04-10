@@ -224,6 +224,41 @@ async def deploy(service: str) -> str:
 
 This calls back into the resource registry using the same URI that MCP clients use — tools only need the URI, not a direct reference to the resource function.
 
+### Structured Return Types
+
+Tools can return Pydantic `BaseModel` or `dataclass` instances — they are automatically serialized to JSON and generate `outputSchema` in `tools/list` responses:
+
+```python
+import dataclasses
+from pydantic import BaseModel
+from aiohttp_mcp import AiohttpMCP
+
+mcp = AiohttpMCP()
+
+
+@dataclasses.dataclass
+class UserData:
+    name: str
+    email: str
+    age: int = 25
+
+
+class UserResult(BaseModel):
+    id: str
+    name: str
+    email: str
+
+
+@mcp.tool()
+async def create_user(data: UserData) -> UserResult:
+    """Create a new user."""
+    # Input: dataclass validated from dict/JSON automatically
+    # Output: BaseModel serialized to JSON, outputSchema auto-generated
+    return UserResult(id="123", name=data.name, email=data.email)
+```
+
+Plain types (`str`, `dict`, `list`) continue to work as before — `outputSchema` is only generated for `BaseModel` and `dataclass` return types.
+
 ### Client Example
 
 Here's how to create a client that interacts with the MCP server using the `mcp` client library:
