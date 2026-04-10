@@ -1,15 +1,9 @@
-from .app import AppBuilder, TransportMode, build_mcp_app, setup_mcp_subapp
+from .app import AppBuilder, build_mcp_app, setup_mcp_subapp
 from .core import AiohttpMCP
-from .types import (
-    Annotations,
-    Context,
-    EventStore,
-    Icon,
-    Prompt,
-    Resource,
-    Tool,
-    ToolAnnotations,
-)
+from .protocol.context import Context, get_current_context
+from .protocol.messages import EventStore, InMemoryEventStore
+from .protocol.models import Annotations, Icon, Prompt, Resource, Tool, ToolAnnotations
+from .protocol.registry import ToolError
 
 __all__ = [
     "AiohttpMCP",
@@ -18,11 +12,13 @@ __all__ = [
     "Context",
     "EventStore",
     "Icon",
+    "InMemoryEventStore",
     "Prompt",
     "Resource",
     "Tool",
     "ToolAnnotations",
-    "TransportMode",
+    "ToolError",
     "build_mcp_app",
+    "get_current_context",
     "setup_mcp_subapp",
 ]

@@ -11,14 +11,19 @@
 
 Tools for building [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) servers on top of [aiohttp](https://docs.aiohttp.org/).
 
+Implements the MCP protocol natively — no heavy SDK dependencies. Only 3 runtime dependencies: `aiohttp`, `aiohttp-sse`, `pydantic`.
+
 ## Features
 
+- Native MCP protocol implementation (supports specs 2025-11-25, 2025-06-18, 2025-03-26)
+- Streamable HTTP transport with SSE streaming
 - Easy integration with aiohttp web applications
-- Support for Model Context Protocol (MCP) tools
-- Async-first design
-- Type hints support
-- Debug mode for development
-- Flexible routing options
+- Tool, Resource, and Prompt support with decorator-based registration
+- Shared state via `ctx.app` and per-request data via `ctx.request`
+- Stateless by default, with optional stateful mode for server push and resumability
+- Event store support for resumability
+- Async-first design with full type hints
+- JSON response mode for non-streaming deployments
 
 ## Installation
 
@@ -97,49 +102,146 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
-### Using Streamable HTTP Transport
+### Stateful Mode & Resumability
 
-For production deployments requiring advanced session management, you can use the streamable HTTP transport mode:
+By default, the server runs in **stateless mode** — each request creates a fresh transport, making it safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses.
+
+For single-instance deployments that need server-initiated push (via GET SSE stream) or SSE resumability, enable **stateful mode**. Session state and events are stored in-process memory — this is not suitable for multi-instance deployments without sticky sessions.
 
 ```python
-import datetime
-from zoneinfo import ZoneInfo
+from aiohttp_mcp import AiohttpMCP, InMemoryEventStore, build_mcp_app
+
+# Stateful with resumability (single instance only)
+# If client disconnects, it can reconnect with Last-Event-ID to replay missed events
+mcp = AiohttpMCP(event_store=InMemoryEventStore())
+app = build_mcp_app(mcp, path="/mcp", stateless=False)
+```
+
+> **Note:** `InMemoryEventStore` is in-process only. For multi-instance stateful deployments, implement a custom `EventStore` backed by shared storage (e.g., Redis) and use sticky sessions.
+
+### Context Access
+
+There are 3 ways to access the MCP context inside tools. All return the same `Context` object:
+
+**1. `get_current_context()` — module function**
+
+```python
+from aiohttp_mcp import get_current_context
+
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = get_current_context()
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    await ctx.info(f"Query by {user_id}")
+    return f"Result for {user_id}"
+```
+
+**2. `mcp.get_context()` — instance method**
+
+```python
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = mcp.get_context()
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    return f"Result for {user_id}"
+```
+
+**3. `ctx: Context` — parameter injection**
+
+Declare `ctx: Context` as a parameter — it's auto-injected and excluded from the tool's input schema:
+
+```python
+from aiohttp_mcp import Context
+
+@mcp.tool()
+async def my_tool(query: str, ctx: Context) -> str:
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    return f"Result for {user_id}"
+```
+
+**Context capabilities:**
+
+- `ctx.request` — aiohttp `Request` (headers, cookies, client IP)
+- `ctx.app` — aiohttp `Application` for shared state (`ctx.app["db_pool"]`)
+- `ctx.request_id` — JSON-RPC request ID
+- `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
+- `await ctx.report_progress(progress, total)` — report progress
+- `await ctx.read_resource(uri)` — read a registered resource
+
+**Shared state via `ctx.app`:**
+
+```python
+from collections.abc import AsyncIterator
 
 from aiohttp import web
 
-from aiohttp_mcp import AiohttpMCP, TransportMode, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, build_mcp_app, get_current_context
 
-# Initialize MCP
 mcp = AiohttpMCP()
 
 
-# Define a tool
 @mcp.tool()
-def get_time(timezone: str) -> str:
-    """Get the current time in the specified timezone."""
-    tz = ZoneInfo(timezone)
-    return datetime.datetime.now(tz).isoformat()
+async def secure_query(sql: str) -> str:
+    """Run a database query with auth validation."""
+    ctx = get_current_context()
+    db_pool = ctx.app["db_pool"]
+    return await db_pool.query(sql)
 
 
-# Create application with streamable transport
-app = build_mcp_app(mcp, path="/mcp", transport_mode=TransportMode.STREAMABLE_HTTP, stateless=True)
-web.run_app(app)
+async def startup(app: web.Application) -> AsyncIterator[None]:
+    app["db_pool"] = await create_db_pool()
+    yield
+    await app["db_pool"].close()
+
+
+app = build_mcp_app(mcp, path="/mcp")
+app.cleanup_ctx.append(startup)
 ```
+
+### Resource Composition
+
+Tools can read registered resources during execution via `ctx.read_resource(uri)`, avoiding logic duplication:
+
+```python
+from aiohttp_mcp import AiohttpMCP, get_current_context
+
+mcp = AiohttpMCP()
+
+
+@mcp.resource("config://{service}")
+async def get_config(service: str) -> str:
+    """Service configuration exposed as a resource."""
+    return load_config(service)
+
+
+@mcp.tool()
+async def deploy(service: str) -> str:
+    """Deploy a service using its registered config."""
+    ctx = get_current_context()
+    config = await ctx.read_resource(f"config://{service}")
+    return f"Deployed {service} with {config}"
+```
+
+This calls back into the resource registry using the same URI that MCP clients use — tools only need the URI, not a direct reference to the resource function.
 
 ### Client Example
 
-Here's how to create a client that interacts with the MCP server:
+Here's how to create a client that interacts with the MCP server using the `mcp` client library:
 
 ```python
 import asyncio
 
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
 
 async def main():
     # Connect to the MCP server
-    async with sse_client("http://localhost:8080/mcp") as (read_stream, write_stream):
+    async with streamablehttp_client("http://localhost:8080/mcp") as (
+        read_stream,
+        write_stream,
+        _,
+    ):
         async with ClientSession(read_stream, write_stream) as session:
             # Initialize the session
             await session.initialize()
@@ -193,11 +295,10 @@ uv run pytest
 
 ## Requirements
 
-- Python 3.10 or higher
+- Python 3.11 or higher
 - aiohttp >= 3.9.0, < 4.0.0
 - aiohttp-sse >= 2.2.0, < 3.0.0
-- anyio >= 4.9.0, < 5.0.0
-- mcp >= 1.8.0, < 2.0.0
+- pydantic >= 2.0.0, < 3.0.0
 
 ## License
 
