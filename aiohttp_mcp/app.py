@@ -70,7 +70,7 @@ def build_mcp_app(
     path: str = "/mcp",
     is_subapp: bool = False,
     json_response: bool = False,
-    stateless: bool = False,
+    stateless: bool = True,
 ) -> web.Application:
     """Build the MCP server application."""
     return AppBuilder(
@@ -87,7 +87,7 @@ def setup_mcp_subapp(
     prefix: str = "/mcp",
     package_names: list[str] | None = None,
     json_response: bool = False,
-    stateless: bool = False,
+    stateless: bool = True,
 ) -> None:
     """Set up the MCP server sub-application with the given prefix."""
     discover_modules(package_names)
