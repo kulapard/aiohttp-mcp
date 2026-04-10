@@ -121,7 +121,54 @@ app = build_mcp_app(mcp, path="/mcp", stateless=False)
 
 ### Context Access
 
-Tools access shared state via `ctx.app` and HTTP request data via `ctx.request`:
+There are 3 ways to access the MCP context inside tools. All return the same `Context` object:
+
+**1. `get_current_context()` — module function (recommended)**
+
+```python
+from aiohttp_mcp import get_current_context
+
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = get_current_context()
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    await ctx.info(f"Query by {user_id}")
+    return f"Result for {user_id}"
+```
+
+**2. `mcp.get_context()` — instance method**
+
+```python
+@mcp.tool()
+async def my_tool(query: str) -> str:
+    ctx = mcp.get_context()
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    return f"Result for {user_id}"
+```
+
+**3. `ctx: Context` — parameter injection**
+
+Declare `ctx: Context` as a parameter — it's auto-injected and excluded from the tool's input schema:
+
+```python
+from aiohttp_mcp import Context
+
+@mcp.tool()
+async def my_tool(query: str, ctx: Context) -> str:
+    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
+    return f"Result for {user_id}"
+```
+
+**Context capabilities:**
+
+- `ctx.request` — aiohttp `Request` (headers, cookies, client IP)
+- `ctx.app` — aiohttp `Application` for shared state (`ctx.app["db_pool"]`)
+- `ctx.request_id` — JSON-RPC request ID
+- `await ctx.info(msg)` / `debug()` / `warning()` / `error()` — send log to client
+- `await ctx.report_progress(progress, total)` — report progress
+- `await ctx.read_resource(uri)` — read a registered resource
+
+**Shared state via `ctx.app`:**
 
 ```python
 from collections.abc import AsyncIterator
@@ -137,17 +184,8 @@ mcp = AiohttpMCP()
 async def secure_query(sql: str) -> str:
     """Run a database query with auth validation."""
     ctx = get_current_context()
-
-    # Access HTTP request (headers, cookies, client IP)
-    user_id = ctx.request.headers.get("X-User-ID", "anonymous")
-
-    # Access shared resources from aiohttp app
     db_pool = ctx.app["db_pool"]
-
-    # Send log to client
-    await ctx.info(f"Query by {user_id}")
-
-    return f"Query by {user_id}: {sql}"
+    return await db_pool.query(sql)
 
 
 async def startup(app: web.Application) -> AsyncIterator[None]:
@@ -159,8 +197,6 @@ async def startup(app: web.Application) -> AsyncIterator[None]:
 app = build_mcp_app(mcp, path="/mcp")
 app.cleanup_ctx.append(startup)
 ```
-
-You can also use `ctx: Context` as an explicit parameter (auto-injected) or `mcp.get_context()`. See [CLAUDE.md](CLAUDE.md#context-access) for all options.
 
 ### Resource Composition
 
