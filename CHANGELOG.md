@@ -7,10 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- `build_mcp_app()` and `setup_mcp_subapp()` now default to `stateless=True`, matching `AppBuilder` and documented behavior
-
 ### Added
+- **Structured return types**: Tools can now return Pydantic `BaseModel` or `dataclass` instances — they are automatically serialized to JSON via Pydantic's `TypeAdapter` instead of `str()`
+- **`outputSchema` generation**: Tools with return type annotations automatically populate `outputSchema` in `tools/list` responses (supported in MCP protocol 2025-06-18+)
 - Native MCP protocol implementation (`aiohttp_mcp/protocol/`) replacing the `mcp` SDK dependency
   - JSON-RPC 2.0 dispatch engine with full MCP method support
   - Tool, Resource, and Prompt registries with decorator-based registration
@@ -24,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Design document at `docs/native-mcp-implementation-plan.md`
 - Documentation policy in CLAUDE.md — code and docs ship together
 - MCPServer dispatch loop tests (18 tests, 87% server.py coverage)
+
+### Fixed
+- `build_mcp_app()` and `setup_mcp_subapp()` now default to `stateless=True`, matching `AppBuilder` and documented behavior
+- Tools returning Pydantic models or dataclasses no longer produce ugly `str()` repr — they are serialized as proper JSON
 
 ### Changed
 - **`stateless=True` is now the default** for `build_mcp_app()`, `setup_mcp_subapp()`, and `AppBuilder`. This is safer for multi-instance and load-balanced deployments. Use `stateless=False` to opt into stateful sessions (server push, event replay).
