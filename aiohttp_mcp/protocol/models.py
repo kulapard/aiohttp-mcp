@@ -6,7 +6,7 @@ replacing imports from the `mcp` package.
 
 from typing import Annotated, Any, Literal
 
-from pydantic import AnyUrl, BaseModel, ConfigDict, Field, RootModel
+from pydantic import AnyUrl, BaseModel, ConfigDict, Discriminator, Field, RootModel, Tag
 
 from .typedefs import RequestId
 
@@ -257,8 +257,15 @@ class ResourceLink(BaseModel):
     meta: dict[str, Any] | None = Field(default=None, alias="_meta")
 
 
-# Union of all content block types
-Content = TextContent | ImageContent | AudioContent | ResourceLink | EmbeddedResource
+# Union of all content block types (discriminated on "type" field)
+Content = Annotated[
+    Annotated[TextContent, Tag("text")]
+    | Annotated[ImageContent, Tag("image")]
+    | Annotated[AudioContent, Tag("audio")]
+    | Annotated[ResourceLink, Tag("resource_link")]
+    | Annotated[EmbeddedResource, Tag("resource")],
+    Discriminator("type"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +277,7 @@ class PromptMessage(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     role: Literal["user", "assistant"]
-    content: TextContent | ImageContent | AudioContent | ResourceLink | EmbeddedResource
+    content: Content
 
 
 class GetPromptResult(BaseModel):
