@@ -66,7 +66,7 @@ class AppBuilder:
 
 
 def build_mcp_app(
-    mcp_registry: AiohttpMCP,
+    mcp: AiohttpMCP,
     path: str = "/mcp",
     is_subapp: bool = False,
     json_response: bool = False,
@@ -74,7 +74,7 @@ def build_mcp_app(
 ) -> web.Application:
     """Build the MCP server application."""
     return AppBuilder(
-        mcp=mcp_registry,
+        mcp=mcp,
         path=path,
         json_response=json_response,
         stateless=stateless,
@@ -83,7 +83,7 @@ def build_mcp_app(
 
 def setup_mcp_subapp(
     app: web.Application,
-    mcp_registry: AiohttpMCP,
+    mcp: AiohttpMCP,
     prefix: str = "/mcp",
     package_names: list[str] | None = None,
     json_response: bool = False,
@@ -93,7 +93,7 @@ def setup_mcp_subapp(
     discover_modules(package_names)
 
     mcp_app = build_mcp_app(
-        mcp_registry,
+        mcp,
         prefix,
         is_subapp=True,
         json_response=json_response,
@@ -101,4 +101,4 @@ def setup_mcp_subapp(
     )
     app.add_subapp(prefix, mcp_app)
 
-    mcp_registry.setup_app(app)
+    mcp.setup_app(app)
