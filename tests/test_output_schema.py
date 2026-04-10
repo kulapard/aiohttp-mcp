@@ -2,12 +2,15 @@
 
 import dataclasses
 import json
+from collections.abc import Callable
 from typing import Any
 
+import pytest
 from pydantic import BaseModel
 
 from aiohttp_mcp import AiohttpMCP
 from aiohttp_mcp.protocol.models import TextContent
+from aiohttp_mcp.protocol.registry import ToolError, _build_output_adapter
 
 # -- Test models --
 
@@ -231,6 +234,42 @@ class TestOutputSchemaGeneration:
 def _no_annotation_tool(msg: str):  # type: ignore[no-untyped-def]
     """Tool without return annotation — defined at module level to avoid mypy error."""
     return msg
+
+
+# -- Tests: error paths --
+
+
+class TestErrorPaths:
+    """Test error/failure paths in _build_output_adapter and call_tool serialization."""
+
+    async def test_uninspectable_function_returns_no_schema(self) -> None:
+        """Functions whose signature can't be inspected should return (None, None)."""
+        # Built-in functions raise ValueError from inspect.signature
+        schema, adapter = _build_output_adapter(len)
+        assert schema is None
+        assert adapter is None
+
+    async def test_unsupported_annotation_returns_no_schema(self) -> None:
+        """Annotations that TypeAdapter can't handle should return (None, None)."""
+
+        # Bare Callable without args is not schema-able
+        def tool_fn() -> Callable:  # type: ignore[type-arg,empty-body]
+            pass
+
+        schema, adapter = _build_output_adapter(tool_fn)
+        assert schema is None
+        assert adapter is None
+
+    async def test_dump_json_failure_raises_tool_error(self) -> None:
+        """If dump_json fails at runtime, it should raise ToolError, not internal error."""
+        mcp = AiohttpMCP()
+
+        @mcp.tool()
+        def get_user() -> UserModel:
+            return object()  # type: ignore[return-value]
+
+        with pytest.raises(ToolError, match="Failed to serialize tool output"):
+            await mcp.call_tool("get_user", {})
 
 
 # -- Tests: serialization --
