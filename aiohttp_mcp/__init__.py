@@ -1,7 +1,7 @@
 from .app import AppBuilder, build_mcp_app, setup_mcp_subapp
 from .core import AiohttpMCP
 from .protocol.context import Context, get_current_context
-from .protocol.messages import EventStore
+from .protocol.messages import EventStore, InMemoryEventStore
 from .protocol.models import Annotations, Icon, Prompt, Resource, Tool, ToolAnnotations
 from .protocol.registry import ToolError
 
@@ -12,6 +12,7 @@ __all__ = [
     "Context",
     "EventStore",
     "Icon",
+    "InMemoryEventStore",
     "Prompt",
     "Resource",
     "Tool",
