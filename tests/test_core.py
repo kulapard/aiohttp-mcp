@@ -276,3 +276,35 @@ async def test_read_resource_with_invalid_uri() -> None:
 
     with pytest.raises(ValueError, match="Unknown resource"):
         await mcp.read_resource("invalid://nonexistent")
+
+
+async def test_add_resource_directly() -> None:
+    mcp = AiohttpMCP()
+
+    async def my_resource() -> str:
+        return "resource-data"
+
+    mcp.add_resource(my_resource, uri="res://direct")
+    resources = await mcp.list_resources()
+    assert len(resources) == 1
+    assert str(resources[0].uri) == "res://direct"
+
+    result = list(await mcp.read_resource("res://direct"))
+    assert result[0].text == "resource-data"
+
+
+async def test_add_prompt_directly() -> None:
+    mcp = AiohttpMCP()
+
+    async def my_prompt() -> str:
+        return "prompt-text"
+
+    mcp.add_prompt(my_prompt, name="direct_prompt")
+    prompts = await mcp.list_prompts()
+    assert len(prompts) == 1
+    assert prompts[0].name == "direct_prompt"
+
+    result = await mcp.get_prompt("direct_prompt")
+    content = result.messages[0].content
+    assert isinstance(content, TextContent)
+    assert content.text == "prompt-text"

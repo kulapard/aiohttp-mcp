@@ -831,3 +831,42 @@ class TestErrorHandling:
             # All streams should be cleaned up
             assert len(transport_stateful._request_streams) == 0
             assert transport_stateful._terminated is True
+
+
+class TestSessionManagerEdgeCases:
+    """Test edge cases in StreamableHTTPSessionManager."""
+
+    async def test_handle_request_not_running(self) -> None:
+        """Calling handle_request before run() raises RuntimeError."""
+        mcp = AiohttpMCP()
+        register_mcp_resources(mcp)
+        manager = StreamableHTTPSessionManager(server=mcp.server)
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+            },
+            body_text='{"jsonrpc": "2.0", "method": "initialize", "id": "1"}',
+        )
+        with pytest.raises(RuntimeError, match="Task group is not initialized"):
+            await manager.handle_request(request)
+
+    async def test_stateful_invalid_session_id(self) -> None:
+        """Request with an unknown session ID returns 400."""
+        mcp = AiohttpMCP()
+        register_mcp_resources(mcp)
+        manager = StreamableHTTPSessionManager(server=mcp.server)
+
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+                MCP_SESSION_ID_HEADER: "nonexistent-session",
+            },
+            body_text='{"jsonrpc": "2.0", "method": "ping", "id": "1"}',
+        )
+        async with manager.run():
+            response = await manager.handle_request(request)
+            assert response.status == HTTPStatus.BAD_REQUEST

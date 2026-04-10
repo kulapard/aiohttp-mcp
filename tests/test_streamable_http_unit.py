@@ -48,9 +48,12 @@ import pytest
 from aiohttp import HttpVersion
 
 from aiohttp_mcp.protocol.messages import EventMessage
-from aiohttp_mcp.protocol.models import JSONRPCMessage, JSONRPCNotification
+from aiohttp_mcp.protocol.models import JSONRPCMessage, JSONRPCNotification, JSONRPCResponse
+from aiohttp_mcp.protocol.streams import create_memory_stream
 from aiohttp_mcp.streamable_http import (
     CONTENT_TYPE_JSON,
+    CONTENT_TYPE_SSE,
+    LAST_EVENT_ID_HEADER,
     MAXIMUM_MESSAGE_SIZE,
     MCP_PROTOCOL_VERSION_HEADER,
     MCP_SESSION_ID_HEADER,
@@ -395,3 +398,237 @@ class TestSessionManagement:
             response = await transport_stateless.handle_request(request)
             # Stateless mode returns Method Not Allowed for DELETE
             assert response.status in (HTTPStatus.NOT_FOUND, HTTPStatus.METHOD_NOT_ALLOWED)
+
+
+class TestGetRequestHandling:
+    """Test GET request handling for SSE streams."""
+
+    async def test_get_missing_accept_sse(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """GET without Accept: text/event-stream returns 406."""
+        request = create_mock_request(
+            method="GET",
+            headers={"accept": CONTENT_TYPE_JSON},
+        )
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.NOT_ACCEPTABLE
+
+    async def test_get_validation_failure_wrong_session(
+        self, transport_stateful: StreamableHTTPServerTransport
+    ) -> None:
+        """GET with wrong session ID returns error."""
+        request = create_mock_request(
+            method="GET",
+            headers={
+                "accept": CONTENT_TYPE_SSE,
+                MCP_SESSION_ID_HEADER: "wrong-session",
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+        )
+        async with transport_stateful.connect():
+            response = await transport_stateful.handle_request(request)
+            assert response.status == HTTPStatus.NOT_FOUND
+
+    async def test_get_validation_failure_missing_session(
+        self, transport_stateful: StreamableHTTPServerTransport
+    ) -> None:
+        """GET without session ID on stateful transport returns error."""
+        request = create_mock_request(
+            method="GET",
+            headers={
+                "accept": CONTENT_TYPE_SSE,
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+        )
+        async with transport_stateful.connect():
+            response = await transport_stateful.handle_request(request)
+            assert response.status == HTTPStatus.BAD_REQUEST
+
+
+class TestDeleteRequestHandling:
+    """Test DELETE request handling for session termination."""
+
+    async def test_delete_no_session_returns_405(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """DELETE when transport has no session ID returns 405."""
+        request = create_mock_request(
+            method="DELETE",
+            headers={MCP_PROTOCOL_VERSION_HEADER: "2025-03-26"},
+        )
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.METHOD_NOT_ALLOWED
+
+    async def test_delete_valid_session(self, transport_stateful: StreamableHTTPServerTransport) -> None:
+        """DELETE with valid session terminates and returns 200."""
+        request = create_mock_request(
+            method="DELETE",
+            headers={
+                MCP_SESSION_ID_HEADER: "test-session",
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+        )
+        async with transport_stateful.connect():
+            response = await transport_stateful.handle_request(request)
+            assert response.status == HTTPStatus.OK
+            assert transport_stateful._terminated
+
+    async def test_delete_wrong_session(self, transport_stateful: StreamableHTTPServerTransport) -> None:
+        """DELETE with wrong session ID returns error."""
+        request = create_mock_request(
+            method="DELETE",
+            headers={
+                MCP_SESSION_ID_HEADER: "wrong-session",
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+        )
+        async with transport_stateful.connect():
+            response = await transport_stateful.handle_request(request)
+            assert response.status == HTTPStatus.NOT_FOUND
+
+
+class TestUnsupportedMethod:
+    """Test unsupported HTTP method handling."""
+
+    async def test_put_returns_405_with_allow(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """PUT returns 405 with Allow header listing valid methods."""
+        request = create_mock_request(method="PUT")
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.METHOD_NOT_ALLOWED
+            assert response.headers["Allow"] == "GET, POST, DELETE"
+
+    async def test_patch_returns_405(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        request = create_mock_request(method="PATCH")
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.METHOD_NOT_ALLOWED
+
+    async def test_unsupported_method_includes_session_id(
+        self, transport_stateful: StreamableHTTPServerTransport
+    ) -> None:
+        request = create_mock_request(method="PUT")
+        async with transport_stateful.connect():
+            response = await transport_stateful.handle_request(request)
+            assert response.headers[MCP_SESSION_ID_HEADER] == "test-session"
+
+
+class TestTerminateSession:
+    """Test session termination and stream cleanup."""
+
+    async def test_terminated_session_rejects_requests(self, transport_stateful: StreamableHTTPServerTransport) -> None:
+        """Requests after termination return 404."""
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+                MCP_SESSION_ID_HEADER: "test-session",
+                MCP_PROTOCOL_VERSION_HEADER: "2025-03-26",
+            },
+            body_text='{"jsonrpc": "2.0", "method": "ping", "id": "1"}',
+        )
+        async with transport_stateful.connect():
+            await transport_stateful._terminate_session()
+            response = await transport_stateful.handle_request(request)
+            assert response.status == HTTPStatus.NOT_FOUND
+
+    async def test_terminate_cleans_request_streams(self, transport_stateful: StreamableHTTPServerTransport) -> None:
+        """Termination cleans up all request streams."""
+        async with transport_stateful.connect():
+            # Add some request streams
+            transport_stateful._request_streams["req-1"] = create_memory_stream(0)
+            transport_stateful._request_streams["req-2"] = create_memory_stream(0)
+            assert len(transport_stateful._request_streams) == 2
+
+            await transport_stateful._terminate_session()
+            assert len(transport_stateful._request_streams) == 0
+
+
+class TestCleanUpMemoryStreams:
+    """Test _clean_up_memory_streams edge cases."""
+
+    async def test_cleanup_nonexistent_stream(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Cleaning up a nonexistent stream is a no-op."""
+        async with transport_stateless.connect():
+            # Should not raise
+            await transport_stateless._clean_up_memory_streams("nonexistent")
+
+    async def test_cleanup_with_error_during_close(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Errors during stream close are logged but not raised."""
+        async with transport_stateless.connect():
+            writer_mock = AsyncMock()
+            reader_mock = AsyncMock()
+            writer_mock.aclose.side_effect = RuntimeError("close failed")
+            transport_stateless._request_streams["err"] = (writer_mock, reader_mock)
+
+            # Should not raise
+            await transport_stateless._clean_up_memory_streams("err")
+            # Stream should be removed from the dict
+            assert "err" not in transport_stateless._request_streams
+
+
+class TestReplayEvents:
+    """Test event replay via Last-Event-ID header."""
+
+    async def test_replay_no_event_store(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Replay request without event store configured returns 500."""
+        request = create_mock_request(
+            method="GET",
+            headers={
+                "accept": CONTENT_TYPE_SSE,
+                LAST_EVENT_ID_HEADER: "some-event-id",
+            },
+        )
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+class TestProtocolVersionValidation:
+    """Test protocol version validation edge cases."""
+
+    async def test_unsupported_protocol_version(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        """Unsupported protocol version returns 400."""
+        request = create_mock_request(
+            method="GET",
+            headers={
+                "accept": CONTENT_TYPE_SSE,
+                MCP_PROTOCOL_VERSION_HEADER: "1999-01-01",
+            },
+        )
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            assert response.status == HTTPStatus.BAD_REQUEST
+
+    async def test_missing_protocol_version_uses_default(
+        self, transport_stateless: StreamableHTTPServerTransport
+    ) -> None:
+        """Missing protocol version header uses the default (latest) version."""
+        # This should NOT return a protocol error
+        request = create_mock_request(
+            method="POST",
+            headers={
+                "accept": f"{CONTENT_TYPE_JSON}, {CONTENT_TYPE_SSE}",
+                "content-type": CONTENT_TYPE_JSON,
+            },
+            body_text='{"jsonrpc": "2.0", "method": "initialize", "id": "1"}',
+        )
+        async with transport_stateless.connect():
+            response = await transport_stateless.handle_request(request)
+            # Should not be a 400 protocol version error
+            assert response.status != HTTPStatus.BAD_REQUEST
+
+
+class TestJsonResponseHelpers:
+    """Test _create_json_response helper."""
+
+    async def test_json_response_with_custom_headers(self, transport_stateful: StreamableHTTPServerTransport) -> None:
+        msg = JSONRPCMessage(root=JSONRPCResponse(jsonrpc="2.0", id="1", result={}))
+        response = transport_stateful._create_json_response(msg, headers={"X-Custom": "val"})
+        assert response.headers["X-Custom"] == "val"
+        assert response.headers[MCP_SESSION_ID_HEADER] == "test-session"
+
+    async def test_json_response_none_body(self, transport_stateless: StreamableHTTPServerTransport) -> None:
+        response = transport_stateless._create_json_response(None, HTTPStatus.ACCEPTED)
+        assert response.status == HTTPStatus.ACCEPTED
+        assert response.body is None
