@@ -438,7 +438,7 @@ _CONTENT_TYPES = (TextContent, ImageContent, AudioContent, EmbeddedResource, Res
 def _convert_to_content(result: Any) -> list[Content]:
     """Convert a tool function result to a list of Content blocks."""
     if isinstance(result, list):
-        if result and isinstance(result[0], _CONTENT_TYPES):
+        if result and all(isinstance(item, _CONTENT_TYPES) for item in result):
             return result
         return [_single_to_content(item) for item in result]
 

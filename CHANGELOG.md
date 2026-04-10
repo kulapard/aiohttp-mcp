@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Tool, Resource, and Prompt registries with decorator-based registration
   - Function introspection for automatic JSON Schema generation from type hints
   - asyncio-based memory streams replacing anyio streams
-  - Context system with `contextvars` propagation for request/lifespan context
+  - Context system with `contextvars` propagation (`ctx.app`, `ctx.request_context.request`)
 - MCP protocol versions `2025-11-25`, `2025-06-18`, `2025-03-26` supported
   - Version negotiation during initialize handshake
   - Per-version response models that exclude fields absent in older specs
@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AppBuilder` simplified to only support Streamable HTTP transport
 - All `anyio` primitives replaced with `asyncio` equivalents (`asyncio.TaskGroup`, `asyncio.Lock`, `asyncio.Queue`)
 - `mcp` moved from runtime dependency to dev-only dependency (used for E2E test client)
+- `add_resource()` now accepts `(fn, uri, **kwargs)` instead of a `FastMCPResource` object
+- `add_prompt()` now accepts `(fn, **kwargs)` instead of a `FastMCPPrompt` object
 
 ### Removed
 - `mcp` and `anyio` as runtime dependencies

@@ -70,7 +70,7 @@ mypy:
 	uv run mypy .
 
 ty:
-	ty check
+	uvx ty check
 
 pre-commit:
 	uv run pre-commit run --all-files
