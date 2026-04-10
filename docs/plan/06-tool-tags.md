@@ -1,4 +1,4 @@
-# Feature 5: Tool Tags + Bulk Configuration
+# Feature 6: Tool Tags + Bulk Configuration
 
 ## Problem
 
@@ -94,3 +94,7 @@ No new exports needed (tags are a parameter, not a type).
 - Test tag-scoped middleware (only runs for matching tools)
 - Test global middleware (no tags) still runs for all tools
 - Test tools with no tags are unaffected by tag-scoped config
+
+## Related
+
+- [Feature 5 (McpGroup)](05-mcp-group.md) — groups auto-apply tags to all their tools, making groups the primary organizational unit and tags secondary metadata
