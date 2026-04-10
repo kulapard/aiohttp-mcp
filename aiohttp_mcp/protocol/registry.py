@@ -4,7 +4,7 @@ Manages registration, listing, and execution of MCP primitives.
 Replaces FastMCP's internal tool/resource/prompt management.
 """
 
-import dataclasses as _dataclasses_module
+import dataclasses
 import inspect
 import json as _json_module
 import logging
@@ -484,7 +484,7 @@ def _build_output_adapter(fn: Callable[..., Any]) -> tuple[dict[str, Any] | None
     # Only use adapter for serialization of structured types (BaseModel, dataclass).
     # Simple types (str, int, dict, list) are already handled by _convert_to_content.
     is_model = isinstance(annotation, type) and issubclass(annotation, BaseModel)
-    is_dc = _dataclasses_module.is_dataclass(annotation) and isinstance(annotation, type)
+    is_dc = dataclasses.is_dataclass(annotation) and isinstance(annotation, type)
     serialization_adapter = adapter if (is_model or is_dc) else None
 
     return schema, serialization_adapter
@@ -513,7 +513,7 @@ def _single_to_content(item: Any) -> Content:
         return TextContent(text=_json_module.dumps(item))
     if isinstance(item, BaseModel):
         return TextContent(text=item.model_dump_json())
-    if _dataclasses_module.is_dataclass(item) and not isinstance(item, type):
+    if dataclasses.is_dataclass(item) and not isinstance(item, type):
         return TextContent(text=TypeAdapter(type(item)).dump_json(item).decode())
 
     return TextContent(text=str(item))
