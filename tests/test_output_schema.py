@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from aiohttp_mcp import AiohttpMCP
 from aiohttp_mcp.protocol.models import TextContent
 
-
 # -- Test models --
 
 
