@@ -455,6 +455,11 @@ def _build_output_adapter(fn: Callable[..., Any]) -> tuple[dict[str, Any] | None
     try:
         sig = inspect.signature(fn, eval_str=True)
     except (ValueError, TypeError):
+        logger.debug(
+            "Could not inspect signature of '%s' for outputSchema generation",
+            getattr(fn, "__qualname__", fn),
+            exc_info=True,
+        )
         return None, None
 
     annotation = sig.return_annotation
@@ -465,6 +470,12 @@ def _build_output_adapter(fn: Callable[..., Any]) -> tuple[dict[str, Any] | None
         adapter = TypeAdapter(annotation)
         schema = adapter.json_schema()
     except Exception:
+        logger.warning(
+            "Could not generate outputSchema for '%s' with return annotation %r",
+            getattr(fn, "__qualname__", fn),
+            annotation,
+            exc_info=True,
+        )
         return None, None
 
     # Only use adapter for serialization of structured types (BaseModel, dataclass).
