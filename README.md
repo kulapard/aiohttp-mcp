@@ -162,6 +162,32 @@ app.cleanup_ctx.append(startup)
 
 You can also use `ctx: Context` as an explicit parameter (auto-injected) or `mcp.get_context()`. See [CLAUDE.md](CLAUDE.md#context-access) for all options.
 
+### Resource Composition
+
+Tools can read registered resources during execution via `ctx.read_resource(uri)`, avoiding logic duplication:
+
+```python
+from aiohttp_mcp import AiohttpMCP, get_current_context
+
+mcp = AiohttpMCP()
+
+
+@mcp.resource("config://{service}")
+async def get_config(service: str) -> str:
+    """Service configuration exposed as a resource."""
+    return load_config(service)
+
+
+@mcp.tool()
+async def deploy(service: str) -> str:
+    """Deploy a service using its registered config."""
+    ctx = get_current_context()
+    config = await ctx.read_resource(f"config://{service}")
+    return f"Deployed {service} with {config}"
+```
+
+This calls back into the resource registry using the same URI that MCP clients use — tools only need the URI, not a direct reference to the resource function.
+
 ### Client Example
 
 Here's how to create a client that interacts with the MCP server using the `mcp` client library:

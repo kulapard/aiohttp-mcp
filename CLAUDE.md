@@ -133,6 +133,28 @@ All approaches give access to the same `Context` object:
 - `await ctx.report_progress(progress, total)` — report progress to client
 - `await ctx.read_resource(uri)` — read a registered resource
 
+### Resource Composition (Tool → Resource)
+
+`ctx.read_resource(uri)` lets a tool read a registered resource during execution. This avoids duplicating resource logic inside tools — instead, tools call back into the registry using the same URI that clients use via `resources/read`.
+
+```python
+@mcp.resource("config://{service}")
+async def get_config(service: str) -> str:
+    """Service configuration exposed as a resource."""
+    return load_config(service)
+
+@mcp.tool()
+async def deploy(service: str) -> str:
+    """Deploy a service using its registered config."""
+    ctx = get_current_context()
+    config = await ctx.read_resource(f"config://{service}")
+    return f"Deployed {service} with {config}"
+```
+
+**Why not just call the function directly?** Because resource functions may be registered dynamically, discovered at import time, or live in separate modules. `read_resource` decouples tools from resource implementations — tools only need the URI, not a reference to the function. It also supports URI template matching (e.g., `config://{service}`), which plain function calls cannot leverage.
+
+**Note:** `read_resource` is only available inside a server request. Calling it outside raises `RuntimeError`.
+
 ## Context Patterns
 
 ### Shared State via `ctx.app`
