@@ -257,7 +257,7 @@ async def create_user(data: UserData) -> UserResult:
     return UserResult(id="123", name=data.name, email=data.email)
 ```
 
-Plain types (`str`, `dict`, `list`) continue to work as before — `outputSchema` is only generated for `BaseModel` and `dataclass` return types.
+Plain types (`str`, `dict`, `list`) continue to serialize as before. `outputSchema` is generated for any return type annotation — `BaseModel` and `dataclass` return values additionally get proper JSON serialization via Pydantic's `TypeAdapter` instead of `str()`.
 
 ### Client Example
 
