@@ -8,7 +8,10 @@ import uuid
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from aiohttp.web import Request
 
 from .models import JSONRPCMessage
 from .typedefs import RequestId
@@ -19,7 +22,7 @@ class ServerMessageMetadata:
     """Metadata attached to server-sent messages."""
 
     related_request_id: RequestId | None = None
-    request_context: Any = None  # aiohttp.web.Request or None
+    request: Request | None = None
 
 
 @dataclass

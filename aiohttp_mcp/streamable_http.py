@@ -233,7 +233,7 @@ class StreamableHTTPServerTransport:
             # For notifications and responses only, return 202 Accepted
             if not isinstance(message.root, JSONRPCRequest):
                 response = self._create_json_response(None, HTTPStatus.ACCEPTED)
-                metadata = ServerMessageMetadata(request_context=request)
+                metadata = ServerMessageMetadata(request=request)
                 session_message = SessionMessage(message, metadata=metadata)
                 await writer.send(session_message)
                 return response
@@ -243,7 +243,7 @@ class StreamableHTTPServerTransport:
             request_stream_reader = self._request_streams[request_id][1]
 
             if self.is_json_response_enabled:
-                metadata = ServerMessageMetadata(request_context=request)
+                metadata = ServerMessageMetadata(request=request)
                 session_message = SessionMessage(message, metadata=metadata)
                 await writer.send(session_message)
                 try:
@@ -307,7 +307,7 @@ class StreamableHTTPServerTransport:
                             tg.create_task(_process_response_inner())
                             tg.create_task(_sse_writer())
 
-                            metadata = ServerMessageMetadata(request_context=request)
+                            metadata = ServerMessageMetadata(request=request)
                             session_message = SessionMessage(message, metadata=metadata)
                             await writer.send(session_message)
 

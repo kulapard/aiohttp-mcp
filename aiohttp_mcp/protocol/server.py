@@ -91,9 +91,9 @@ class MCPServer:
             nonlocal negotiated_version
 
             message = session_message.message
-            request_context_data = None
+            http_request = None
             if session_message.metadata and isinstance(session_message.metadata, ServerMessageMetadata):
-                request_context_data = session_message.metadata.request_context
+                http_request = session_message.metadata.request
 
             root = message.root
 
@@ -123,7 +123,7 @@ class MCPServer:
             # Build response metadata
             response_metadata = ServerMessageMetadata(
                 related_request_id=request_id,
-                request_context=request_context_data,
+                request=http_request,
             )
 
             try:
@@ -154,7 +154,7 @@ class MCPServer:
                 ctx: Context = Context(
                     RequestContext(
                         request_id=request_id,
-                        request=request_context_data,
+                        request=http_request,
                     ),
                     send_notification=_send_notification,
                     read_resource=self.registry.read_resource,
