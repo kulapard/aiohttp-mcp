@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from aiohttp_mcp.protocol.func_metadata import FuncMetadata, InvalidSignature, func_metadata
+from aiohttp_mcp.protocol.func_metadata import InvalidSignature, func_metadata
 
 
 async def test_basic_function_metadata() -> None:
