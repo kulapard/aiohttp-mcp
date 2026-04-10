@@ -102,21 +102,22 @@ setup_mcp_subapp(app, mcp, prefix="/mcp")
 web.run_app(app)
 ```
 
-### Stateful Mode
+### Stateful Mode & Resumability
 
-By default, the server runs in **stateless mode** — each request creates a fresh transport, making it safe for load-balanced and multi-instance deployments.
+By default, the server runs in **stateless mode** — each request creates a fresh transport, making it safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses.
 
-For single-instance deployments that need server-initiated notifications (via GET SSE stream) or event replay/resumability, enable **stateful mode**:
+For single-instance deployments that need server-initiated push (via GET SSE stream) or SSE resumability, enable **stateful mode**. Session state and events are stored in-process memory — this is not suitable for multi-instance deployments without sticky sessions.
 
 ```python
-from aiohttp_mcp import AiohttpMCP, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, InMemoryEventStore, build_mcp_app
 
-mcp = AiohttpMCP()
-
-# Stateful: sessions persist in memory, enables server push & resumability
-# Requires sticky sessions if running behind a load balancer
+# Stateful with resumability (single instance only)
+# If client disconnects, it can reconnect with Last-Event-ID to replay missed events
+mcp = AiohttpMCP(event_store=InMemoryEventStore())
 app = build_mcp_app(mcp, path="/mcp", stateless=False)
 ```
+
+> **Note:** `InMemoryEventStore` is in-process only. For multi-instance stateful deployments, implement a custom `EventStore` backed by shared storage (e.g., Redis) and use sticky sessions.
 
 ### Context Access
 

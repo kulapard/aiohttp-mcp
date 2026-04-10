@@ -54,19 +54,24 @@ The library uses **Streamable HTTP** transport (MCP spec 2025-11-25):
 - JSON response mode for request-response patterns
 
 **Stateless vs Stateful:**
-- **Stateless (default):** Each request creates a fresh transport. Safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses. No server-initiated push or event replay.
-- **Stateful (`stateless=False`):** Sessions persist in memory with a session ID. Enables server-initiated notifications via GET SSE stream and event replay/resumability. Requires sticky sessions if running multiple instances.
+- **Stateless (default):** Each request creates a fresh transport. Safe for load-balanced and multi-instance deployments. Tool notifications (`ctx.info()`) work inline via SSE POST responses. No server-initiated push or event replay. `event_store` is ignored.
+- **Stateful (`stateless=False`):** Sessions persist in memory on a single process. Enables server-initiated notifications via GET SSE stream and event replay/resumability via `event_store`. **Not suitable for multi-instance deployments** — session state and event store are in-process only. Requires sticky sessions behind a load balancer.
+
+**Event Store and Resumability:**
+
+The `event_store` parameter enables SSE resumability in stateful mode. When a client's SSE connection drops, it can reconnect with `Last-Event-ID` header and the server replays missed events. The built-in `InMemoryEventStore` stores events in a Python dict — it only works within a single process. For multi-instance stateful deployments, you would need a custom `EventStore` implementation backed by shared storage (e.g., Redis) plus sticky sessions. In stateless mode, `event_store` is always set to `None` regardless of what is passed.
 
 **Usage:**
 ```python
-from aiohttp_mcp import AiohttpMCP, build_mcp_app
+from aiohttp_mcp import AiohttpMCP, InMemoryEventStore, build_mcp_app
 
 mcp = AiohttpMCP()
 
 # Default (stateless) — safe for multi-instance deployments
 app = build_mcp_app(mcp, path="/mcp")
 
-# Stateful mode (single instance, enables server push & resumability)
+# Stateful mode with resumability (single instance only)
+mcp = AiohttpMCP(event_store=InMemoryEventStore())
 app = build_mcp_app(mcp, path="/mcp", stateless=False)
 
 # JSON response mode (instead of SSE streaming)
