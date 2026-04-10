@@ -14,7 +14,6 @@ from aiohttp_mcp.protocol.context import (
     set_current_context,
 )
 
-
 # ---------------------------------------------------------------------------
 # Context properties
 # ---------------------------------------------------------------------------
@@ -120,7 +119,7 @@ async def test_read_resource_calls_reader() -> None:
 
 async def test_set_and_get_current_context() -> None:
     ctx = Context(request_context=RequestContext())
-    token = set_current_context(ctx)
+    set_current_context(ctx)
     try:
         assert get_current_context() is ctx
     finally:
@@ -140,21 +139,25 @@ async def test_get_current_context_raises_when_unset() -> None:
 
 def test_find_context_kwarg_found() -> None:
     def fn(x: int, ctx: Context) -> None: ...
+
     assert find_context_kwarg(fn) == "ctx"
 
 
 def test_find_context_kwarg_not_found() -> None:
     def fn(x: int, y: str) -> None: ...
+
     assert find_context_kwarg(fn) is None
 
 
 def test_find_context_kwarg_no_annotation() -> None:
     def fn(x) -> None: ...  # type: ignore[no-untyped-def]
+
     assert find_context_kwarg(fn) is None
 
 
 def test_find_context_kwarg_union_type() -> None:
     def fn(ctx: Context | None) -> None: ...
+
     assert find_context_kwarg(fn) == "ctx"
 
 

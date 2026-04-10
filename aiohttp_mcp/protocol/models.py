@@ -259,7 +259,6 @@ class ResourceLink(BaseModel):
 
 # Union of all content block types
 Content = TextContent | ImageContent | AudioContent | ResourceLink | EmbeddedResource
-ContentBlock = Content  # Alias
 
 
 # ---------------------------------------------------------------------------
