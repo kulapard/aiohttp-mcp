@@ -54,14 +54,6 @@ class MCPServer:
         self.instructions = instructions
         self.registry = registry or Registry()
 
-    def create_initialization_options(self) -> dict[str, Any]:
-        """Create initialization options dict (for compatibility with transport layer)."""
-        return {
-            "server_name": self.name,
-            "server_version": self.version,
-            "instructions": self.instructions,
-        }
-
     async def run(  # noqa: C901
         self,
         read_stream: StreamReader[SessionMessage | Exception],
