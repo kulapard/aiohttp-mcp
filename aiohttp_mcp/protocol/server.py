@@ -155,9 +155,9 @@ class MCPServer:
                     RequestContext(
                         request_id=request_id,
                         request=request_context_data,
-                        _send_notification=_send_notification,
-                        _read_resource=self.registry.read_resource,
-                    )
+                    ),
+                    send_notification=_send_notification,
+                    read_resource=self.registry.read_resource,
                 )
                 set_current_context(ctx)
 

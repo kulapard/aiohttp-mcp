@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextvars
 import inspect
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, get_args, get_origin
 
 if TYPE_CHECKING:
@@ -24,9 +24,6 @@ class RequestContext:
 
     request_id: str | int | None = None
     request: Request | None = None
-    session: Any = None
-    _send_notification: NotificationSender | None = field(default=None, repr=False)
-    _read_resource: ResourceReader | None = field(default=None, repr=False)
 
 
 class Context:
@@ -41,8 +38,16 @@ class Context:
             ...
     """
 
-    def __init__(self, request_context: RequestContext) -> None:
-        self._request_context = request_context
+    def __init__(
+        self,
+        request_context: RequestContext | None = None,
+        *,
+        send_notification: NotificationSender | None = None,
+        read_resource: ResourceReader | None = None,
+    ) -> None:
+        self._request_context = request_context or RequestContext()
+        self._send_notification = send_notification
+        self._read_resource = read_resource
 
     @property
     def request_context(self) -> RequestContext:
@@ -80,7 +85,7 @@ class Context:
         logger_name: str | None = None,
     ) -> None:
         """Send a log message to the MCP client."""
-        sender = self._request_context._send_notification
+        sender = self._send_notification
         if sender is None:
             return
         params: dict[str, Any] = {"level": level, "data": message}
@@ -113,7 +118,7 @@ class Context:
         message: str | None = None,
     ) -> None:
         """Report progress for the current operation."""
-        sender = self._request_context._send_notification
+        sender = self._send_notification
         if sender is None:
             return
         params: dict[str, Any] = {"progress": progress}
@@ -129,7 +134,7 @@ class Context:
 
     async def read_resource(self, uri: str) -> Iterable[Any]:
         """Read a resource by URI."""
-        reader = self._request_context._read_resource
+        reader = self._read_resource
         if reader is None:
             raise RuntimeError("read_resource is not available outside of a server request")
         return await reader(uri)

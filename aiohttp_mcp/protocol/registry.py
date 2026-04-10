@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import AnyUrl
 
-from .context import Context, RequestContext, find_context_kwarg, get_current_context
+from .context import Context, find_context_kwarg, get_current_context
 from .func_metadata import FuncMetadata, func_metadata
 from .models import (
     Annotations,
@@ -210,7 +210,7 @@ class Registry:
             try:
                 ctx = get_current_context()
             except ValueError:
-                ctx = Context(request_context=RequestContext())
+                ctx = Context()
             extra_args = {td.context_kwarg: ctx}
 
         try:
@@ -322,7 +322,7 @@ class Registry:
             try:
                 kwargs[rd.context_kwarg] = get_current_context()
             except ValueError:
-                kwargs[rd.context_kwarg] = Context(request_context=RequestContext())
+                kwargs[rd.context_kwarg] = Context()
 
         if rd.is_async:
             result = await rd.fn(**kwargs)
@@ -402,7 +402,7 @@ class Registry:
             try:
                 kwargs[pd.context_kwarg] = get_current_context()
             except ValueError:
-                kwargs[pd.context_kwarg] = Context(request_context=RequestContext())
+                kwargs[pd.context_kwarg] = Context()
 
         if pd.is_async:
             result = await pd.fn(**kwargs)

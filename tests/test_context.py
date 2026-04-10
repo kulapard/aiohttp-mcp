@@ -20,13 +20,13 @@ from aiohttp_mcp.protocol.context import (
 
 
 async def test_app_property_raises_without_request() -> None:
-    ctx = Context(request_context=RequestContext())
+    ctx = Context()
     with pytest.raises(RuntimeError, match="No HTTP request context available"):
         _ = ctx.app
 
 
 async def test_request_id_from_context() -> None:
-    ctx = Context(request_context=RequestContext(request_id="req-123"))
+    ctx = Context(RequestContext(request_id="req-123"))
     assert ctx.request_id == "req-123"
 
 
@@ -37,14 +37,14 @@ async def test_request_id_from_context() -> None:
 
 async def test_log_no_sender() -> None:
     """log() is a no-op when send_notification is None."""
-    ctx = Context(request_context=RequestContext())
+    ctx = Context()
     # Should not raise
     await ctx.log("info", "msg")
 
 
 async def test_log_with_logger_name() -> None:
     sender = AsyncMock()
-    ctx = Context(request_context=RequestContext(_send_notification=sender))
+    ctx = Context(send_notification=sender)
     await ctx.log("info", "test message", logger_name="my.logger")
     sender.assert_called_once_with(
         "notifications/message",
@@ -54,7 +54,7 @@ async def test_log_with_logger_name() -> None:
 
 async def test_log_levels() -> None:
     sender = AsyncMock()
-    ctx = Context(request_context=RequestContext(_send_notification=sender))
+    ctx = Context(send_notification=sender)
     await ctx.debug("d")
     await ctx.info("i")
     await ctx.warning("w")
@@ -68,14 +68,14 @@ async def test_log_levels() -> None:
 
 
 async def test_report_progress_no_sender() -> None:
-    ctx = Context(request_context=RequestContext())
+    ctx = Context()
     # Should not raise
     await ctx.report_progress(0.5)
 
 
 async def test_report_progress_with_total_and_message() -> None:
     sender = AsyncMock()
-    ctx = Context(request_context=RequestContext(request_id="req-1", _send_notification=sender))
+    ctx = Context(RequestContext(request_id="req-1"), send_notification=sender)
     await ctx.report_progress(0.5, total=1.0, message="halfway")
     sender.assert_called_once()
     params = sender.call_args[0][1]
@@ -87,7 +87,7 @@ async def test_report_progress_with_total_and_message() -> None:
 
 async def test_report_progress_without_request_id() -> None:
     sender = AsyncMock()
-    ctx = Context(request_context=RequestContext(_send_notification=sender))
+    ctx = Context(send_notification=sender)
     await ctx.report_progress(0.3)
     params = sender.call_args[0][1]
     assert "progressToken" not in params
@@ -99,14 +99,14 @@ async def test_report_progress_without_request_id() -> None:
 
 
 async def test_read_resource_raises_without_reader() -> None:
-    ctx = Context(request_context=RequestContext())
+    ctx = Context()
     with pytest.raises(RuntimeError, match="read_resource is not available"):
         await ctx.read_resource("res://x")
 
 
 async def test_read_resource_calls_reader() -> None:
     reader = AsyncMock(return_value=["content"])
-    ctx = Context(request_context=RequestContext(_read_resource=reader))
+    ctx = Context(read_resource=reader)
     result = await ctx.read_resource("res://x")
     reader.assert_called_once_with("res://x")
     assert result == ["content"]
@@ -118,7 +118,7 @@ async def test_read_resource_calls_reader() -> None:
 
 
 async def test_set_and_get_current_context() -> None:
-    ctx = Context(request_context=RequestContext())
+    ctx = Context()
     set_current_context(ctx)
     try:
         assert get_current_context() is ctx
