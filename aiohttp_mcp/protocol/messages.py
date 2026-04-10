@@ -3,6 +3,8 @@
 Replaces mcp.shared.message and mcp.server.streamable_http event types.
 """
 
+from __future__ import annotations
+
 import abc
 import uuid
 from collections import defaultdict
