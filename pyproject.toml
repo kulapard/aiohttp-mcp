@@ -60,7 +60,7 @@ include = [
 
 [dependency-groups]
 dev = [
-    "mcp>=1.24.0,<2.0.0",
+    "mcp>=1.24.0,<3.0.0",
     "mypy>=1.15.0",
     "python-dotenv>=1.1.0",
     "anthropic>=0.49.0",
