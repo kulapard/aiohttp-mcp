@@ -89,6 +89,7 @@ Call `get_current_context()` — no extra parameters needed on the tool function
 ```python
 from aiohttp_mcp import get_current_context
 
+
 @mcp.tool()
 async def my_tool(query: str) -> str:
     ctx = get_current_context()
@@ -115,6 +116,7 @@ Declare `ctx: Context` as a parameter — it's auto-injected and excluded from t
 
 ```python
 from aiohttp_mcp import Context
+
 
 @mcp.tool()
 async def my_tool(query: str, ctx: Context) -> str:
@@ -143,6 +145,7 @@ async def get_config(service: str) -> str:
     """Service configuration exposed as a resource."""
     return load_config(service)
 
+
 @mcp.tool()
 async def deploy(service: str) -> str:
     """Deploy a service using its registered config."""
@@ -168,16 +171,19 @@ from aiohttp_mcp import AiohttpMCP, build_mcp_app, get_current_context
 
 mcp = AiohttpMCP()
 
+
 @mcp.tool()
 async def query_db(sql: str) -> str:
     ctx = get_current_context()
     db_pool = ctx.app["db_pool"]
     return await db_pool.query(sql)
 
+
 async def startup(app: web.Application) -> AsyncIterator[None]:
     app["db_pool"] = await create_db_pool("postgresql://localhost/mydb")
     yield
     await app["db_pool"].close()
+
 
 app = build_mcp_app(mcp, path="/mcp")
 app.cleanup_ctx.append(startup)
@@ -230,6 +236,7 @@ from aiohttp_mcp import AppBuilder
 
 mcp = AiohttpMCP()
 app_builder = AppBuilder(mcp=mcp, path="/mcp")
+
 
 async def authenticated_handler(request):
     # Validate auth before processing
