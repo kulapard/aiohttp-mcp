@@ -128,6 +128,7 @@ There are 3 ways to access the MCP context inside tools. All return the same `Co
 ```python
 from aiohttp_mcp import get_current_context
 
+
 @mcp.tool()
 async def my_tool(query: str) -> str:
     ctx = get_current_context()
@@ -152,6 +153,7 @@ Declare `ctx: Context` as a parameter — it's auto-injected and excluded from t
 
 ```python
 from aiohttp_mcp import Context
+
 
 @mcp.tool()
 async def my_tool(query: str, ctx: Context) -> str:
