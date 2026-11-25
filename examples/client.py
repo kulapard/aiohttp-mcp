@@ -1,10 +1,19 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Self
 
 from anthropic import Anthropic
-from anthropic.types import ContentBlock, MessageParam, TextBlock, ToolParam, ToolResultBlockParam, ToolUseBlock
+from anthropic.types import (
+    AssistantMessageParam,
+    ContentBlock,
+    MessageParam,
+    TextBlock,
+    ToolParam,
+    ToolResultBlockParam,
+    ToolUseBlock,
+    UserMessageParam,
+)
 from dotenv import load_dotenv
 from mcp import ClientSession
 from mcp.client.sse import sse_client
@@ -24,7 +33,7 @@ class MCPClient:
         self.anthropic: Anthropic = Anthropic()
 
     @asynccontextmanager
-    async def connect_sse(self, url: str) -> AsyncIterator[None]:
+    async def connect_sse(self, url: str) -> AsyncGenerator[None, None]:
         async with sse_client(url) as (read_stream, write_stream):
             async with ClientSession(read_stream, write_stream) as session:
                 self.session = session
@@ -42,7 +51,7 @@ class MCPClient:
 
         # Prepare the initial message
         messages: list[MessageParam] = [
-            MessageParam(
+            UserMessageParam(
                 role="user",
                 content=query,
             )
@@ -53,7 +62,7 @@ class MCPClient:
             ToolParam(
                 name=tool.name,
                 description=tool.description or "",
-                input_schema=tool.inputSchema,
+                input_schema=tool.input_schema,
             )
             for tool in tools_list.tools
         ]
@@ -84,13 +93,13 @@ class MCPClient:
 
                 assistant_message_content.append(content)
                 messages.append(
-                    MessageParam(
+                    AssistantMessageParam(
                         role="assistant",
                         content=assistant_message_content,
                     )
                 )
                 messages.append(
-                    MessageParam(
+                    UserMessageParam(
                         role="user",
                         content=[
                             ToolResultBlockParam(
