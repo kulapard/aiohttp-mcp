@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `mcp` moved from runtime dependency to dev-only dependency (used for E2E test client)
 - `add_resource()` now accepts `(fn, uri, **kwargs)` instead of a `FastMCPResource` object
 - `add_prompt()` now accepts `(fn, **kwargs)` instead of a `FastMCPPrompt` object
+- `aiohttp-sse` upper bound raised to `<4.0.0` (allows 3.x); dev-only `mcp` bound raised to `<3.0.0`
 
 ### Removed
 - `mcp` and `anyio` as runtime dependencies

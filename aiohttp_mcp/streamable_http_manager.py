@@ -9,7 +9,7 @@ import asyncio
 import contextlib
 import logging
 import threading
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from http import HTTPStatus
 from uuid import uuid4
 
@@ -50,7 +50,7 @@ class StreamableHTTPSessionManager:
         self._running = False
 
     @contextlib.asynccontextmanager
-    async def run(self) -> AsyncIterator[None]:
+    async def run(self) -> AsyncGenerator[None, None]:
         with self._run_lock:
             if self._has_started:
                 raise RuntimeError(
